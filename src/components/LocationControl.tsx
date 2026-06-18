@@ -31,9 +31,7 @@ const LocationControl: React.FC<LocationControlProps> = ({
               className="location-select"
               value={selectedValue}
               onChange={(e) => {
-                if (e.target.value) {
-                  onSelect(level, e.target.value);
-                }
+                onSelect(level, e.target.value);
               }}
             >
               <option value="">未選択</option>

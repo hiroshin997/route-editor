@@ -75,7 +75,7 @@ export function computeRoutePolylines(docs: RouteDoc[], _bbox: BBox): RoutePolyl
     for (const routeArray of doc.routes) {
       const coords = buildPolylineCoords(routeArray);
       if (coords.length === 0) continue;
-      result.push({ index, name: doc.name, coords });
+      result.push({ index, name: doc.name, coords, relation_id: doc.relation_id });
       index++;
     }
   }

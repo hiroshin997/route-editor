@@ -1,5 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { MapContainer, TileLayer, GeoJSON, Polyline, Marker, useMap, useMapEvents } from 'react-leaflet';
+import React, { useEffect, useRef } from 'react';
+import { MapContainer, TileLayer, GeoJSON, Polyline, Marker, Tooltip, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { RoutePolyline } from '../types/route';
@@ -12,88 +12,64 @@ L.Icon.Default.mergeOptions({
   shadowUrl: require('leaflet/dist/images/marker-shadow.png'),
 });
 
-function createIndexIcon(index: number): L.DivIcon {
+/** Red rectangle DivIcon for active (hovered/selected) route label on the map. */
+function createIndexIconActive(index: number): L.DivIcon {
   return L.divIcon({
     className: '',
-    html: `<div class="route-index-icon">${index}</div>`,
+    html: `<div class="route-index-icon route-index-icon--active">${index}</div>`,
     iconSize: [24, 20],
     iconAnchor: [12, 10],
   });
 }
 
-/** Pixel interval between labels along a polyline. */
-const LABEL_INTERVAL_PX = 640;
-
-interface LabelMarker {
-  pos: [number, number];
-  index: number;
+interface RouteLineProps {
+  route: RoutePolyline;
+  isActive: boolean;
+  selectedIndex: number | null;
+  onHoveredIndexChange: (index: number | null) => void;
+  onSelectedIndexChange: (index: number | null) => void;
 }
 
 /**
- * Calculates label positions at equal pixel intervals along each polyline.
- * Re-runs on zoomend so spacing stays visually consistent across zoom levels.
+ * Active route is brought to front so it is never hidden under overlapping lines.
  */
-const RouteLabels: React.FC<{ routePolylines: RoutePolyline[] }> = ({ routePolylines }) => {
-  const map = useMap();
-  const [labels, setLabels] = useState<LabelMarker[]>([]);
+const RouteLine: React.FC<RouteLineProps> = ({
+  route,
+  isActive,
+  selectedIndex,
+  onHoveredIndexChange,
+  onSelectedIndexChange,
+}) => {
+  const lineRef = useRef<L.Polyline | null>(null);
 
-  // Use a ref so the latest routePolylines/map are always captured by the
-  // zoomend handler without needing to re-register it.
-  const calcRef = useRef<() => void>(() => {});
-  calcRef.current = () => {
-    const result: LabelMarker[] = [];
-
-    for (const rp of routePolylines) {
-      if (rp.coords.length < 2) continue;
-
-      // Start half an interval in so the first label appears midway through
-      // the first stretch rather than right at the beginning.
-      let distToNext = LABEL_INTERVAL_PX / 2;
-
-      for (let i = 0; i < rp.coords.length - 1; i++) {
-        const p1 = map.latLngToLayerPoint(rp.coords[i]);
-        const p2 = map.latLngToLayerPoint(rp.coords[i + 1]);
-        const dx = p2.x - p1.x;
-        const dy = p2.y - p1.y;
-        const segLen = Math.sqrt(dx * dx + dy * dy);
-        if (segLen < 0.001) continue;
-
-        let walked = 0;
-        while (walked + distToNext <= segLen) {
-          walked += distToNext;
-          const t = walked / segLen;
-          result.push({
-            pos: [
-              rp.coords[i][0] + t * (rp.coords[i + 1][0] - rp.coords[i][0]),
-              rp.coords[i][1] + t * (rp.coords[i + 1][1] - rp.coords[i][1]),
-            ],
-            index: rp.index,
-          });
-          distToNext = LABEL_INTERVAL_PX;
-        }
-        distToNext -= segLen - walked;
-      }
-    }
-
-    setLabels(result);
-  };
-
-  // Recalculate when routes change
   useEffect(() => {
-    calcRef.current();
-  }, [routePolylines]);
-
-  // Recalculate on zoom change (pixel/coord ratio changes)
-  useMapEvents({
-    zoomend: () => calcRef.current(),
-  });
+    if (isActive) {
+      lineRef.current?.bringToFront();
+    }
+  }, [isActive]);
 
   return (
-    <>
-      {labels.map((lbl, i) => (
-        <Marker key={i} position={lbl.pos} icon={createIndexIcon(lbl.index)} />
-      ))}
-    </>
+    <Polyline
+      ref={lineRef}
+      key={`rp-${route.index}`}
+      positions={route.coords}
+      pathOptions={{
+        color: isActive ? 'red' : 'green',
+        weight: isActive ? 4 : 3,
+        opacity: 0.8,
+      }}
+      eventHandlers={{
+        mouseover: () => onHoveredIndexChange(route.index),
+        mouseout: () => onHoveredIndexChange(null),
+        click: () => onSelectedIndexChange(
+          selectedIndex === route.index ? null : route.index
+        ),
+      }}
+    >
+      <Tooltip sticky className="route-tooltip-hover">
+        <div className="route-index-icon route-index-icon--active">{route.index}</div>
+      </Tooltip>
+    </Polyline>
   );
 };
 
@@ -176,6 +152,12 @@ interface MapViewProps {
   /** Stable key to force GeoJSON layer replacement when selection changes */
   polygonKey: string;
   routePolylines: RoutePolyline[];
+  /** Preview polylines shown as blinking red dotted lines */
+  previewRoutes: RoutePolyline[];
+  hoveredIndex: number | null;
+  selectedIndex: number | null;
+  onHoveredIndexChange: (index: number | null) => void;
+  onSelectedIndexChange: (index: number | null) => void;
   onCenterChange: (center: [number, number]) => void;
   onZoomChange: (zoom: number) => void;
 }
@@ -186,9 +168,23 @@ const MapView: React.FC<MapViewProps> = ({
   polygon,
   polygonKey,
   routePolylines,
+  previewRoutes,
+  hoveredIndex,
+  selectedIndex,
+  onHoveredIndexChange,
+  onSelectedIndexChange,
   onCenterChange,
   onZoomChange,
 }) => {
+  // Midpoint coord of the selected polyline for the persistent label marker
+  const selectedPolyline = selectedIndex !== null
+    ? routePolylines.find((rp) => rp.index === selectedIndex) ?? null
+    : null;
+  const selectedMidpoint: [number, number] | null =
+    selectedPolyline && selectedPolyline.coords.length > 0
+      ? selectedPolyline.coords[Math.floor(selectedPolyline.coords.length / 2)]
+      : null;
+
   return (
     <div className="map-view-area">
       <MapContainer
@@ -221,15 +217,30 @@ const MapView: React.FC<MapViewProps> = ({
           />
         )}
         {routePolylines.map((rp) => (
-          <Polyline
+          <RouteLine
             key={`rp-${rp.index}`}
-            positions={rp.coords}
-            color="green"
-            weight={3}
-            opacity={0.8}
+            route={rp}
+            isActive={rp.index === hoveredIndex || rp.index === selectedIndex}
+            selectedIndex={selectedIndex}
+            onHoveredIndexChange={onHoveredIndexChange}
+            onSelectedIndexChange={onSelectedIndexChange}
           />
         ))}
-        <RouteLabels routePolylines={routePolylines} />
+        {/* Fixed label at polyline midpoint when selected from panel */}
+        {selectedMidpoint && selectedIndex !== null && (
+          <Marker
+            position={selectedMidpoint}
+            icon={createIndexIconActive(selectedIndex)}
+          />
+        )}
+        {/* Preview polylines: blinking red dotted lines */}
+        {previewRoutes.map((rp) => (
+          <Polyline
+            key={`preview-${rp.index}`}
+            positions={rp.coords}
+            pathOptions={{ color: 'red', weight: 3, dashArray: '8 6', className: 'route-preview-blink' }}
+          />
+        ))}
       </MapContainer>
     </div>
   );

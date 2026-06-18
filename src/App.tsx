@@ -4,6 +4,7 @@ import LocationControl from './components/LocationControl';
 import ZoomButtons from './components/ZoomButtons';
 import MapView from './components/MapView';
 import RoutePanel from './components/RoutePanel';
+import NewRoutePanel from './components/NewRoutePanel';
 import { BBox, RouteDoc, RoutePolyline } from './types/route';
 import { computeBboxFromGeoJSON, computeRoutePolylines } from './utils/routeUtils';
 import './App.css';
@@ -43,11 +44,24 @@ function App() {
   const [optionsByLevel, setOptionsByLevel] = useState<{ [level: number]: string[] }>({});
   const [polygon, setPolygon] = useState<object | null>(null);
   const [routePolylines, setRoutePolylines] = useState<RoutePolyline[]>([]);
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+  const [panelMode, setPanelMode] = useState<'routes' | 'newRoute'>('routes');
+  const [previewRoutes, setPreviewRoutes] = useState<RoutePolyline[]>([]);
+  const [cityBbox, setCityBbox] = useState<BBox | null>(saved?.cityBbox ?? null);
 
   // Refs for values needed inside callbacks without causing stale closures
   const latestRef  = useRef({ selections, zoom, mapCenter });
   const cityBboxRef = useRef<BBox | null>(saved?.cityBbox ?? null);
   latestRef.current = { selections, zoom, mapCenter };
+
+  // Close newRoute panel when zoom drops below 14
+  useEffect(() => {
+    if (zoom < 14 && panelMode === 'newRoute') {
+      setPanelMode('routes');
+      setPreviewRoutes([]);
+    }
+  }, [zoom, panelMode]);
 
   // ── API helpers ───────────────────────────────────────────────────────────────
 
@@ -141,7 +155,10 @@ function App() {
   // ── Event handlers ────────────────────────────────────────────────────────────
 
   const handleSelect = async (level: number, name: string): Promise<void> => {
-    const newSelections = [...selections.slice(0, level - 1), name];
+    const newSelections = name
+      ? [...selections.slice(0, level - 1), name]
+      : selections.slice(0, level - 1);
+
     setSelections(newSelections);
     setPolygon(null);
 
@@ -153,13 +170,45 @@ function App() {
       return next;
     });
 
-    const geoData = await fetchPolygon(newSelections);
-    await fetchOptions(level + 1, newSelections);
+    let geoData: object | null = null;
+    if (newSelections.length > 0) {
+      geoData = await fetchPolygon(newSelections);
+    }
+
+    if (name) {
+      await fetchOptions(level + 1, newSelections);
+    }
+
+    if (!name) {
+      if (level <= 2) {
+        cityBboxRef.current = level === 1 ? null : cityBboxRef.current;
+        setRoutePolylines([]);
+        setSelectedIndex(null);
+        setHoveredIndex(null);
+      }
+
+      if (level === 2) {
+        cityBboxRef.current = null;
+      }
+
+      writeCookieState({
+        selections: newSelections,
+        zoom: latestRef.current.zoom,
+        mapCenter: latestRef.current.mapCenter,
+        cityBbox: level <= 2 ? undefined : cityBboxRef.current ?? undefined,
+      });
+      return;
+    }
 
     if (level === 1) {
       // Prefecture changed → clear routes and city bbox
       cityBboxRef.current = null;
+      setCityBbox(null);
       setRoutePolylines([]);
+      setSelectedIndex(null);
+      setHoveredIndex(null);
+      setPanelMode('routes');
+      setPreviewRoutes([]);
       writeCookieState({
         selections: newSelections,
         zoom: latestRef.current.zoom,
@@ -171,6 +220,10 @@ function App() {
       const bbox = computeBboxFromGeoJSON(geoData);
       if (bbox) {
         cityBboxRef.current = bbox;
+        setCityBbox(bbox);
+        setSelectedIndex(null);
+        setPanelMode('routes');
+        setPreviewRoutes([]);
         await fetchRoutes(bbox);
         writeCookieState({
           selections: newSelections,
@@ -234,10 +287,49 @@ function App() {
           polygon={polygon}
           polygonKey={selections.join(',')}
           routePolylines={routePolylines}
+          previewRoutes={previewRoutes}
+          hoveredIndex={hoveredIndex}
+          selectedIndex={selectedIndex}
+          onHoveredIndexChange={setHoveredIndex}
+          onSelectedIndexChange={(index) =>
+            setSelectedIndex((prev) => (prev === index ? null : index))
+          }
           onCenterChange={handleCenterChange}
           onZoomChange={handleZoomChange}
         />
-        <RoutePanel routePolylines={routePolylines} />
+        {panelMode === 'routes' ? (
+          <RoutePanel
+            routePolylines={routePolylines}
+            hoveredIndex={hoveredIndex}
+            selectedIndex={selectedIndex}
+            zoom={zoom}
+            citySelected={selections.length >= 2}
+            onSelect={(index) =>
+              setSelectedIndex((prev) => (prev === index ? null : index))
+            }
+            onNewRoute={() => setPanelMode('newRoute')}
+          />
+        ) : (
+          <NewRoutePanel
+            cityBbox={cityBbox}
+            routePolylines={routePolylines}
+            onClose={() => {
+              setPanelMode('routes');
+              setPreviewRoutes([]);
+            }}
+            onPreviewRoutes={setPreviewRoutes}
+            onExistingRouteSelect={(index) => {
+              setSelectedIndex((prev) => (prev === index ? null : index));
+              setPanelMode('routes');
+              setPreviewRoutes([]);
+            }}
+            onSaved={async () => {
+              if (cityBboxRef.current) await fetchRoutes(cityBboxRef.current);
+              setPanelMode('routes');
+              setPreviewRoutes([]);
+            }}
+          />
+        )}
       </div>
     </div>
   );

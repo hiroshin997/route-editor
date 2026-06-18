@@ -41,4 +41,6 @@ export interface RoutePolyline {
   name: string;
   /** [lat, lon] pairs for Leaflet */
   coords: [number, number][];
+  /** Original relation_id from jproad_routes (undefined for preview routes) */
+  relation_id?: number;
 }
