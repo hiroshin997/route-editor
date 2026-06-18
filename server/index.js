@@ -274,6 +274,53 @@ app.get('/api/routes/in-bbox', async (req, res) => {
   }
 });
 
+// ── Route names GET / PUT ─────────────────────────────────────────────────────
+
+/**
+ * GET /api/routes/:relation_id/names
+ * Returns the names array for a specific route.
+ */
+app.get('/api/routes/:relation_id/names', async (req, res) => {
+  try {
+    const relation_id = parseInt(req.params.relation_id, 10);
+    if (isNaN(relation_id)) return res.status(400).json({ error: 'Invalid relation_id' });
+
+    const doc = await osmDb.collection(ROUTES_COLLECTION).findOne(
+      { relation_id },
+      { projection: { names: 1, _id: 0 } }
+    );
+    if (!doc) return res.status(404).json({ error: 'Not found' });
+    res.json(doc.names || []);
+  } catch (err) {
+    console.error('/api/routes/:relation_id/names GET error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * PUT /api/routes/:relation_id/names
+ * Body: { names: [{value, is_global, locations}] }
+ * Replaces the names array of the specified route.
+ */
+app.put('/api/routes/:relation_id/names', async (req, res) => {
+  try {
+    const relation_id = parseInt(req.params.relation_id, 10);
+    if (isNaN(relation_id)) return res.status(400).json({ error: 'Invalid relation_id' });
+
+    const { names } = req.body;
+    if (!Array.isArray(names)) return res.status(400).json({ error: 'names array required' });
+
+    await osmDb.collection(ROUTES_COLLECTION).updateOne(
+      { relation_id },
+      { $set: { names } }
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('/api/routes/:relation_id/names PUT error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── New-route registration endpoints ─────────────────────────────────────────
 
 /**

@@ -5,6 +5,7 @@ import ZoomButtons from './components/ZoomButtons';
 import MapView from './components/MapView';
 import RoutePanel from './components/RoutePanel';
 import NewRoutePanel from './components/NewRoutePanel';
+import NamesEditModal from './components/NamesEditModal';
 import { BBox, RouteDoc, RoutePolyline } from './types/route';
 import { computeBboxFromGeoJSON, computeRoutePolylines } from './utils/routeUtils';
 import './App.css';
@@ -49,6 +50,7 @@ function App() {
   const [panelMode, setPanelMode] = useState<'routes' | 'newRoute'>('routes');
   const [previewRoutes, setPreviewRoutes] = useState<RoutePolyline[]>([]);
   const [cityBbox, setCityBbox] = useState<BBox | null>(saved?.cityBbox ?? null);
+  const [editingRelationId, setEditingRelationId] = useState<number | null>(null);
 
   // Refs for values needed inside callbacks without causing stale closures
   const latestRef  = useRef({ selections, zoom, mapCenter });
@@ -308,6 +310,7 @@ function App() {
               setSelectedIndex((prev) => (prev === index ? null : index))
             }
             onNewRoute={() => setPanelMode('newRoute')}
+            onEditNames={(rid) => setEditingRelationId(rid)}
           />
         ) : (
           <NewRoutePanel
@@ -331,6 +334,16 @@ function App() {
           />
         )}
       </div>
+      {editingRelationId !== null && (
+        <NamesEditModal
+          relation_id={editingRelationId}
+          onClose={() => setEditingRelationId(null)}
+          onSaved={async () => {
+            if (cityBboxRef.current) await fetchRoutes(cityBboxRef.current);
+            setEditingRelationId(null);
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -416,3 +416,176 @@ body,
   animation: routePreviewBlink 0.8s ease-in-out infinite;
 }
 
+/* ── Route panel edit button ─────────────────────────────────────────────── */
+.route-panel-edit-btn {
+  margin-left: auto;
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #888;
+  padding: 1px 2px;
+  line-height: 0;
+  border-radius: 3px;
+}
+
+.route-panel-edit-btn:hover {
+  color: #0f766e;
+  background: #e8f5f4;
+}
+
+/* ── NamesEditModal ──────────────────────────────────────────────────────── */
+.names-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 3000;
+}
+
+.names-modal {
+  background: #fff;
+  border-radius: 8px;
+  padding: 28px 28px 20px;
+  min-width: 380px;
+  max-width: 560px;
+  width: 90%;
+  position: relative;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.25);
+}
+
+.names-modal-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #666;
+  padding: 4px;
+  border-radius: 4px;
+  line-height: 0;
+}
+
+.names-modal-close:hover {
+  background: #f0f0f0;
+  color: #333;
+}
+
+.names-modal-message {
+  font-size: 14px;
+  color: #333;
+  margin: 0 0 14px;
+}
+
+.names-modal-loading {
+  font-size: 13px;
+  color: #888;
+}
+
+.names-modal-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.names-modal-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.names-modal-row--deleted .names-modal-input {
+  background: #f0f0f0;
+  color: #aaa;
+  text-decoration: line-through;
+}
+
+.names-modal-input {
+  flex: 1;
+  padding: 5px 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+.names-modal-input:focus {
+  outline: 2px solid #0f766e;
+  outline-offset: 1px;
+}
+
+.names-modal-del-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 3px;
+  border-radius: 3px;
+  color: #888;
+  line-height: 0;
+}
+
+.names-modal-del-btn:hover {
+  background: #f5f5f5;
+  color: #c00;
+}
+
+.names-modal-del-btn--clear {
+  color: #d00;
+}
+
+.names-modal-add-btn {
+  background: none;
+  border: 1px dashed #aaa;
+  border-radius: 4px;
+  padding: 4px 10px;
+  font-size: 12px;
+  color: #555;
+  cursor: pointer;
+  margin-bottom: 14px;
+  width: 100%;
+}
+
+.names-modal-add-btn:hover {
+  border-color: #0f766e;
+  color: #0f766e;
+  background: #f0faf9;
+}
+
+.names-modal-footer {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.names-modal-save-btn {
+  padding: 6px 18px;
+  background: #0f766e;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.names-modal-save-btn:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+}
+
+.names-modal-cancel-btn {
+  padding: 6px 18px;
+  background: #e5e7eb;
+  color: #333;
+  border: none;
+  border-radius: 4px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.names-modal-cancel-btn:hover {
+  background: #d1d5db;
+}
+

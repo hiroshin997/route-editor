@@ -1,4 +1,5 @@
 import React from 'react';
+import EditIcon from '@mui/icons-material/Edit';
 import { RoutePolyline } from '../types/route';
 
 interface RoutePanelProps {
@@ -9,6 +10,7 @@ interface RoutePanelProps {
   citySelected: boolean;
   onSelect: (index: number | null) => void;
   onNewRoute: () => void;
+  onEditNames: (relation_id: number) => void;
 }
 
 const RoutePanel: React.FC<RoutePanelProps> = ({
@@ -19,6 +21,7 @@ const RoutePanel: React.FC<RoutePanelProps> = ({
   citySelected,
   onSelect,
   onNewRoute,
+  onEditNames,
 }) => {
   const newRouteEnabled = citySelected && zoom >= 14;
   return (
@@ -46,6 +49,15 @@ const RoutePanel: React.FC<RoutePanelProps> = ({
                 {rp.index}
               </span>
               <span className="route-panel-name">{rp.name}</span>
+              {rp.relation_id !== undefined && (
+                <button
+                  className="route-panel-edit-btn"
+                  title="名前を編集"
+                  onClick={(e) => { e.stopPropagation(); onEditNames(rp.relation_id!); }}
+                >
+                  <EditIcon fontSize="small" />
+                </button>
+              )}
             </div>
           );
         })
