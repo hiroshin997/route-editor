@@ -274,6 +274,92 @@ app.get('/api/routes/in-bbox', async (req, res) => {
   }
 });
 
+// ── Route trim endpoints ───────────────────────────────────────────────────────
+
+function computeBboxFromPaths(routes) {
+  let minLat = Infinity, maxLat = -Infinity, minLon = Infinity, maxLon = -Infinity;
+  for (const path of (routes || [])) {
+    for (const item of (path || [])) {
+      for (const s of (item.road_sectors || [])) {
+        if (s.lat0 < minLat) minLat = s.lat0; if (s.lat0 > maxLat) maxLat = s.lat0;
+        if (s.lat1 < minLat) minLat = s.lat1; if (s.lat1 > maxLat) maxLat = s.lat1;
+        if (s.lon0 < minLon) minLon = s.lon0; if (s.lon0 > maxLon) maxLon = s.lon0;
+        if (s.lon1 < minLon) minLon = s.lon1; if (s.lon1 > maxLon) maxLon = s.lon1;
+      }
+    }
+  }
+  return isFinite(minLat) ? { minLat, maxLat, minLon, maxLon } : { minLat: 0, maxLat: 0, minLon: 0, maxLon: 0 };
+}
+
+/**
+ * GET /api/routes/:relation_id/roads?path_idx=N
+ * Returns the road_items array for routes[N] of the specified route doc.
+ */
+app.get('/api/routes/:relation_id/roads', async (req, res) => {
+  try {
+    const relation_id = parseInt(req.params.relation_id, 10);
+    const path_idx = parseInt(req.query.path_idx, 10);
+    if (isNaN(relation_id) || isNaN(path_idx)) {
+      return res.status(400).json({ error: 'Invalid relation_id or path_idx' });
+    }
+
+    const doc = await osmDb.collection(ROUTES_COLLECTION).findOne(
+      { relation_id },
+      { projection: { routes: 1, _id: 0 } }
+    );
+    if (!doc) return res.status(404).json({ error: 'Not found' });
+
+    const path = (doc.routes || [])[path_idx];
+    if (!path) return res.status(404).json({ error: 'Path not found' });
+
+    res.json(path);
+  } catch (err) {
+    console.error('/api/routes/:id/roads error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * PUT /api/routes/:relation_id/trim
+ * Body: { path_idx, new_roads }
+ * Replaces routes[path_idx] with new_roads, updates min/max_side_road_id on
+ * the new endpoints, recomputes bbox, and sets updated_at.
+ */
+app.put('/api/routes/:relation_id/trim', async (req, res) => {
+  try {
+    const relation_id = parseInt(req.params.relation_id, 10);
+    const { path_idx, new_roads } = req.body;
+    if (!Array.isArray(new_roads) || new_roads.length === 0) {
+      return res.status(400).json({ error: 'new_roads array required' });
+    }
+
+    const col = osmDb.collection(ROUTES_COLLECTION);
+    const doc = await col.findOne({ relation_id }, { projection: { routes: 1, _id: 0 } });
+    if (!doc) return res.status(404).json({ error: 'Not found' });
+
+    // Enforce -1 on new endpoint side-road IDs
+    const updated = new_roads.map((r, i) => {
+      let road = { ...r };
+      if (i === 0) road = { ...road, min_side_road_id: '-1' };
+      if (i === new_roads.length - 1) road = { ...road, max_side_road_id: '-1' };
+      return road;
+    });
+
+    const routes = (doc.routes || []).map((p, i) => (i === path_idx ? updated : p));
+    const bbox = computeBboxFromPaths(routes);
+
+    const pad = (n) => String(n).padStart(2, '0');
+    const jst = new Date(Date.now() + 9 * 3600 * 1000);
+    const updated_at = `${jst.getUTCFullYear()}-${pad(jst.getUTCMonth()+1)}-${pad(jst.getUTCDate())}T${pad(jst.getUTCHours())}:${pad(jst.getUTCMinutes())}:${pad(jst.getUTCSeconds())}+09:00`;
+
+    await col.updateOne({ relation_id }, { $set: { routes, bbox, updated_at } });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('/api/routes/:id/trim error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Route extension endpoints ─────────────────────────────────────────────────
 
 /**

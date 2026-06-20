@@ -2,8 +2,9 @@ import React, { useEffect, useRef } from 'react';
 import { MapContainer, TileLayer, GeoJSON, Polyline, Marker, Tooltip, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { RoutePolyline, EndpointInfo, ExtendModeState } from '../types/route';
+import { RoutePolyline, EndpointInfo, ExtendModeState, TrimModeState } from '../types/route';
 import ExtendRouteOverlay from './ExtendRouteOverlay';
+import TrimRouteOverlay from './TrimRouteOverlay';
 
 // Fix default marker icon paths broken by webpack
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -158,6 +159,7 @@ interface MapViewProps {
   hoveredIndex: number | null;
   selectedIndex: number | null;
   extendMode: ExtendModeState | null;
+  trimMode: TrimModeState | null;
   onHoveredIndexChange: (index: number | null) => void;
   onSelectedIndexChange: (index: number | null) => void;
   onEndpointClick: (ep: EndpointInfo) => void;
@@ -165,6 +167,8 @@ interface MapViewProps {
   onForward: () => void;
   onSaveAndClose: () => void;
   onCancelExtend: () => void;
+  onTrimStart: () => void;
+  onTrimEnd: () => void;
   onCenterChange: (center: [number, number]) => void;
   onZoomChange: (zoom: number) => void;
 }
@@ -179,6 +183,7 @@ const MapView: React.FC<MapViewProps> = ({
   hoveredIndex,
   selectedIndex,
   extendMode,
+  trimMode,
   onHoveredIndexChange,
   onSelectedIndexChange,
   onEndpointClick,
@@ -186,12 +191,26 @@ const MapView: React.FC<MapViewProps> = ({
   onForward,
   onSaveAndClose,
   onCancelExtend,
+  onTrimStart,
+  onTrimEnd,
   onCenterChange,
   onZoomChange,
 }) => {
+  // In extend mode: hide all routes except the one being extended.
+  // In trim mode: hide all routes – TrimRouteOverlay handles rendering.
+  const visiblePolylines = (() => {
+    if (extendMode) {
+      return routePolylines.filter((rp) => rp.relation_id === extendMode.relation_id);
+    }
+    if (trimMode) {
+      return [];
+    }
+    return routePolylines;
+  })();
+
   // Midpoint coord of the selected polyline for the persistent label marker
   const selectedPolyline = selectedIndex !== null
-    ? routePolylines.find((rp) => rp.index === selectedIndex) ?? null
+    ? visiblePolylines.find((rp) => rp.index === selectedIndex) ?? null
     : null;
   const selectedMidpoint: [number, number] | null =
     selectedPolyline && selectedPolyline.coords.length > 0
@@ -229,7 +248,7 @@ const MapView: React.FC<MapViewProps> = ({
             }}
           />
         )}
-        {routePolylines.map((rp) => (
+        {visiblePolylines.map((rp) => (
           <RouteLine
             key={`rp-${rp.index}`}
             route={rp}
@@ -261,6 +280,11 @@ const MapView: React.FC<MapViewProps> = ({
           onForward={onForward}
           onSaveAndClose={onSaveAndClose}
           onCancelExtend={onCancelExtend}
+        />
+        <TrimRouteOverlay
+          trimMode={trimMode}
+          onTrimStart={onTrimStart}
+          onTrimEnd={onTrimEnd}
         />
       </MapContainer>
     </div>

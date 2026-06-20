@@ -418,7 +418,92 @@ body,
   animation: routePreviewBlink 0.8s ease-in-out infinite;
 }
 
-/* ── Route panel extend button ───────────────────────────────────────────── */
+/* ── Route panel trim button ─────────────────────────────────────────────── */
+.route-panel-trim-btn {
+  color: #888;
+}
+
+.route-panel-trim-btn--active {
+  color: #f97316 !important;
+}
+
+/* ── Scissors marker icon ────────────────────────────────────────────────── */
+.scissors-marker-icon {
+  cursor: pointer;
+  filter: drop-shadow(0 1px 2px rgba(0,0,0,0.35));
+}
+
+/* ── TrimRoutePanel ──────────────────────────────────────────────────────── */
+.trim-route-panel {
+  width: 220px;
+  border-left: 1px solid #d0d0d0;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  padding: 10px 10px 12px;
+}
+
+.trim-route-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.trim-route-panel-title {
+  font-size: 14px;
+  font-weight: bold;
+  color: #333;
+}
+
+.trim-route-panel-close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #666;
+  padding: 2px 4px;
+  border-radius: 3px;
+  line-height: 0;
+}
+
+.trim-route-panel-close:hover {
+  background: #eee;
+}
+
+.trim-route-panel-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.trim-route-btn {
+  flex: 1;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.trim-route-save-btn {
+  background: #0f766e;
+  color: white;
+}
+
+.trim-route-save-btn:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+}
+
+.trim-route-cancel-btn {
+  background: #e5e7eb;
+  color: #333;
+}
+
+.trim-route-cancel-btn:hover {
+  background: #d1d5db;
+}
 .route-panel-extend-btn {
   color: #888;
 }

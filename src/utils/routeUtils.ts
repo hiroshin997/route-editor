@@ -68,14 +68,22 @@ function buildPolylineCoords(roadObjects: RoadObject[]): [number, number][] {
 
 // ── Main export ───────────────────────────────────────────────────────────────
 
-export function computeRoutePolylines(docs: RouteDoc[], _bbox: BBox): RoutePolyline[] {
+export function computeRoutePolylines(docs: RouteDoc[], _bbox: BBox | null): RoutePolyline[] {
   const result: RoutePolyline[] = [];
   let index = 1;
   for (const doc of docs) {
-    for (const routeArray of doc.routes) {
+    for (let i = 0; i < doc.routes.length; i++) {
+      const routeArray = doc.routes[i];
       const coords = buildPolylineCoords(routeArray);
       if (coords.length === 0) continue;
-      result.push({ index, name: doc.name, coords, relation_id: doc.relation_id });
+      result.push({
+        index,
+        name: doc.name,
+        coords,
+        relation_id: doc.relation_id,
+        path_idx: i,
+        road_count: routeArray.length,
+      });
       index++;
     }
   }

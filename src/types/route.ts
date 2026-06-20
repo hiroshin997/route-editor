@@ -43,9 +43,22 @@ export interface RoutePolyline {
   coords: [number, number][];
   /** Original relation_id from jproad_routes (undefined for preview routes) */
   relation_id?: number;
+  /** Index in doc.routes[] for this path */
+  path_idx?: number;
+  /** Number of road_items in this path (for disabling trim button) */
+  road_count?: number;
 }
 
 // ── Route extension types ─────────────────────────────────────────────────────
+
+export interface TrimModeState {
+  relation_id: number;
+  path_idx: number;
+  originalRoads: any[];     // unchanged – for isDirty check
+  currentRoads: any[];      // roads still in the route
+  trimmedFromStart: any[];  // removed from front (gray display)
+  trimmedFromEnd: any[];    // removed from back  (gray display)
+}
 
 export interface EndpointInfo {
   path_idx: number;
@@ -89,6 +102,15 @@ export interface ExtendModalState {
   arrows: RoadArrow[] | null;
   selected_road_id: number | null;
   excluded_road_ids: number[];
+}
+
+export interface TrimModeState {
+  relation_id: number;
+  path_idx: number;
+  originalRoads: any[];      // unchanged – for isDirty check
+  currentRoads: any[];       // roads still in the route
+  trimmedFromStart: any[];   // removed from front (gray display)
+  trimmedFromEnd: any[];     // removed from back (gray display)
 }
 
 export interface ExtendModeState {

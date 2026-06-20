@@ -1,6 +1,7 @@
 import React from 'react';
 import EditIcon from '@mui/icons-material/Edit';
 import OpenWithIcon from '@mui/icons-material/OpenWith';
+import ContentCutIcon from '@mui/icons-material/ContentCut';
 import { RoutePolyline } from '../types/route';
 
 interface RoutePanelProps {
@@ -14,6 +15,8 @@ interface RoutePanelProps {
   onEditNames: (relation_id: number) => void;
   onExtendRoute: (relation_id: number) => void;
   extendingRelationId?: number;
+  onTrimRoute: (relation_id: number, path_idx: number) => void;
+  trimmingRelationId?: number;
 }
 
 const RoutePanel: React.FC<RoutePanelProps> = ({
@@ -27,6 +30,8 @@ const RoutePanel: React.FC<RoutePanelProps> = ({
   onEditNames,
   onExtendRoute,
   extendingRelationId,
+  onTrimRoute,
+  trimmingRelationId,
 }) => {
   const newRouteEnabled = citySelected && zoom >= 14;
   return (
@@ -69,6 +74,14 @@ const RoutePanel: React.FC<RoutePanelProps> = ({
                     onClick={(e) => { e.stopPropagation(); onExtendRoute(rp.relation_id!); }}
                   >
                     <OpenWithIcon fontSize="small" />
+                  </button>
+                  <button
+                    className={`route-panel-edit-btn route-panel-trim-btn${trimmingRelationId === rp.relation_id ? ' route-panel-trim-btn--active' : ''}`}
+                    title="経路を剪定"
+                    disabled={(rp.road_count ?? 2) <= 1}
+                    onClick={(e) => { e.stopPropagation(); onTrimRoute(rp.relation_id!, rp.path_idx ?? 0); }}
+                  >
+                    <ContentCutIcon fontSize="small" />
                   </button>
                 </>
               )}

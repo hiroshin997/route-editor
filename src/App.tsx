@@ -6,7 +6,8 @@ import MapView from './components/MapView';
 import RoutePanel from './components/RoutePanel';
 import NewRoutePanel from './components/NewRoutePanel';
 import NamesEditModal from './components/NamesEditModal';
-import { BBox, RouteDoc, RoutePolyline, EndpointInfo, RoadArrow, PendingRoadItem, ExtendModeState } from './types/route';
+import TrimRoutePanel from './components/TrimRoutePanel';
+import { BBox, RouteDoc, RoutePolyline, EndpointInfo, RoadArrow, PendingRoadItem, ExtendModeState, TrimModeState } from './types/route';
 import { computeBboxFromGeoJSON, computeRoutePolylines } from './utils/routeUtils';
 import './App.css';
 
@@ -47,22 +48,25 @@ function App() {
   const [routePolylines, setRoutePolylines] = useState<RoutePolyline[]>([]);
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
-  const [panelMode, setPanelMode] = useState<'routes' | 'newRoute'>('routes');
+  const [panelMode, setPanelMode] = useState<'routes' | 'newRoute' | 'trim'>('routes');
   const [previewRoutes, setPreviewRoutes] = useState<RoutePolyline[]>([]);
   const [cityBbox, setCityBbox] = useState<BBox | null>(saved?.cityBbox ?? null);
   const [editingRelationId, setEditingRelationId] = useState<number | null>(null);
   const [extendMode, setExtendMode] = useState<ExtendModeState | null>(null);
+  const [trimMode, setTrimMode] = useState<TrimModeState | null>(null);
+  const [isTrimSaving, setIsTrimSaving] = useState(false);
 
   // Refs for values needed inside callbacks without causing stale closures
   const latestRef  = useRef({ selections, zoom, mapCenter });
   const cityBboxRef = useRef<BBox | null>(saved?.cityBbox ?? null);
   latestRef.current = { selections, zoom, mapCenter };
 
-  // Close newRoute panel when zoom drops below 14
+  // Close newRoute / trim panel when zoom drops below 14
   useEffect(() => {
-    if (zoom < 14 && panelMode === 'newRoute') {
+    if (zoom < 14 && (panelMode === 'newRoute' || panelMode === 'trim')) {
       setPanelMode('routes');
       setPreviewRoutes([]);
+      setTrimMode(null);
     }
   }, [zoom, panelMode]);
 
@@ -212,6 +216,7 @@ function App() {
       setHoveredIndex(null);
       setPanelMode('routes');
       setPreviewRoutes([]);
+      setTrimMode(null);
       writeCookieState({
         selections: newSelections,
         zoom: latestRef.current.zoom,
@@ -227,6 +232,7 @@ function App() {
         setSelectedIndex(null);
         setPanelMode('routes');
         setPreviewRoutes([]);
+        setTrimMode(null);
         await fetchRoutes(bbox);
         writeCookieState({
           selections: newSelections,
@@ -383,6 +389,71 @@ function App() {
     }
   };
 
+  // ── Route trim handlers ────────────────────────────────────────────────────────
+
+  const handleOpenTrimMode = async (relation_id: number, path_idx: number): Promise<void> => {
+    const rp = routePolylines.find((p) => p.relation_id === relation_id && p.path_idx === path_idx);
+    if (rp) setSelectedIndex(rp.index);
+    try {
+      const res = await fetch(`/api/routes/${relation_id}/roads?path_idx=${path_idx}`);
+      const roads: any[] = await res.json();
+      setTrimMode({ relation_id, path_idx, originalRoads: roads, currentRoads: roads, trimmedFromStart: [], trimmedFromEnd: [] });
+      setPanelMode('trim');
+    } catch (e) {
+      console.error('[App] failed to fetch road items for trim:', e);
+    }
+  };
+
+  const handleTrimStart = (): void => {
+    setTrimMode((prev) => {
+      if (!prev || prev.currentRoads.length <= 1) return prev;
+      return {
+        ...prev,
+        trimmedFromStart: [...prev.trimmedFromStart, prev.currentRoads[0]],
+        currentRoads: prev.currentRoads.slice(1),
+      };
+    });
+  };
+
+  const handleTrimEnd = (): void => {
+    setTrimMode((prev) => {
+      if (!prev || prev.currentRoads.length <= 1) return prev;
+      const last = prev.currentRoads[prev.currentRoads.length - 1];
+      return {
+        ...prev,
+        trimmedFromEnd: [last, ...prev.trimmedFromEnd],
+        currentRoads: prev.currentRoads.slice(0, -1),
+      };
+    });
+  };
+
+  const handleSaveTrim = async (): Promise<void> => {
+    if (!trimMode) return;
+    setIsTrimSaving(true);
+    try {
+      const res = await fetch(`/api/routes/${trimMode.relation_id}/trim`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path_idx: trimMode.path_idx, new_roads: trimMode.currentRoads }),
+      });
+      if (res.ok) {
+        if (cityBboxRef.current) await fetchRoutes(cityBboxRef.current);
+        setTrimMode(null);
+        setPanelMode('routes');
+      }
+    } finally {
+      setIsTrimSaving(false);
+    }
+  };
+
+  const handleCancelTrim = (): void => {
+    const isDirty =
+      trimMode ? trimMode.trimmedFromStart.length > 0 || trimMode.trimmedFromEnd.length > 0 : false;
+    if (isDirty && !window.confirm('編集された内容は全て破棄されます。よろしいですか？')) return;
+    setTrimMode(null);
+    setPanelMode('routes');
+  };
+
   // ── Derived state ─────────────────────────────────────────────────────────────
 
   const nextLevel = selections.length + 1;
@@ -411,6 +482,7 @@ function App() {
           hoveredIndex={hoveredIndex}
           selectedIndex={selectedIndex}
           extendMode={extendMode}
+          trimMode={trimMode}
           onHoveredIndexChange={setHoveredIndex}
           onSelectedIndexChange={(index) =>
             setSelectedIndex((prev) => (prev === index ? null : index))
@@ -420,6 +492,8 @@ function App() {
           onForward={handleForward}
           onSaveAndClose={handleSaveExtend}
           onCancelExtend={handleCancelExtend}
+          onTrimStart={handleTrimStart}
+          onTrimEnd={handleTrimEnd}
           onCenterChange={handleCenterChange}
           onZoomChange={handleZoomChange}
         />
@@ -437,6 +511,16 @@ function App() {
             onEditNames={(rid) => setEditingRelationId(rid)}
             onExtendRoute={handleOpenExtendMode}
             extendingRelationId={extendMode?.relation_id}
+            onTrimRoute={handleOpenTrimMode}
+            trimmingRelationId={trimMode?.relation_id}
+          />
+        ) : panelMode === 'trim' ? (
+          <TrimRoutePanel
+            isDirty={!!(trimMode && (trimMode.trimmedFromStart.length > 0 || trimMode.trimmedFromEnd.length > 0))}
+            isSaving={isTrimSaving}
+            onSave={handleSaveTrim}
+            onCancel={handleCancelTrim}
+            onClose={handleCancelTrim}
           />
         ) : (
           <NewRoutePanel

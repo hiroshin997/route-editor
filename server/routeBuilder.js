@@ -522,6 +522,11 @@ async function saveRoute(previewData, osmDb) {
     routes: previewData.routes,
     ref: '',
     network: '',
+    updated_at: (() => {
+      const pad = (n) => String(n).padStart(2, '0');
+      const jst = new Date(Date.now() + 9 * 3600 * 1000);
+      return `${jst.getUTCFullYear()}-${pad(jst.getUTCMonth()+1)}-${pad(jst.getUTCDate())}T${pad(jst.getUTCHours())}:${pad(jst.getUTCMinutes())}:${pad(jst.getUTCSeconds())}+09:00`;
+    })(),
   };
 
   const result = await col.insertOne(doc);
