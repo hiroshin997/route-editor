@@ -6,7 +6,7 @@ import MapView from './components/MapView';
 import RoutePanel from './components/RoutePanel';
 import NewRoutePanel from './components/NewRoutePanel';
 import NamesEditModal from './components/NamesEditModal';
-import { BBox, RouteDoc, RoutePolyline } from './types/route';
+import { BBox, RouteDoc, RoutePolyline, EndpointInfo, RoadArrow, PendingRoadItem, ExtendModeState } from './types/route';
 import { computeBboxFromGeoJSON, computeRoutePolylines } from './utils/routeUtils';
 import './App.css';
 
@@ -51,6 +51,7 @@ function App() {
   const [previewRoutes, setPreviewRoutes] = useState<RoutePolyline[]>([]);
   const [cityBbox, setCityBbox] = useState<BBox | null>(saved?.cityBbox ?? null);
   const [editingRelationId, setEditingRelationId] = useState<number | null>(null);
+  const [extendMode, setExtendMode] = useState<ExtendModeState | null>(null);
 
   // Refs for values needed inside callbacks without causing stale closures
   const latestRef  = useRef({ selections, zoom, mapCenter });
@@ -265,6 +266,123 @@ function App() {
     });
   };
 
+  // ── Route extension handlers ──────────────────────────────────────────────────
+
+  const handleOpenExtendMode = async (relation_id: number): Promise<void> => {
+    if (extendMode?.relation_id === relation_id) {
+      setExtendMode(null);
+      return;
+    }
+    // Also set this route as selected
+    const rp = routePolylines.find((p) => p.relation_id === relation_id);
+    if (rp) setSelectedIndex(rp.index);
+    try {
+      const res = await fetch(`/api/routes/${relation_id}/endpoints`);
+      const endpoints: EndpointInfo[] = await res.json();
+      setExtendMode({ relation_id, endpoints, modal: null, pending_roads: [] });
+    } catch (e) {
+      console.error('[App] failed to fetch endpoints:', e);
+    }
+  };
+
+  const handleCancelExtend = (): void => {
+    if (extendMode && extendMode.pending_roads.length > 0) {
+      if (!window.confirm('編集された内容は全て破棄されます。よろしいですか？')) return;
+    }
+    setExtendMode(null);
+  };
+
+  const handleEndpointClick = async (ep: EndpointInfo): Promise<void> => {
+    if (!extendMode) return;
+    const excludeIds = [ep.road_id, ...extendMode.pending_roads.map((pr) => pr.road_id)];
+
+    // Show modal immediately with loading state (arrows = null)
+    setExtendMode((prev) => ({
+      ...prev!,
+      modal: {
+        position: [ep.lat, ep.lon],
+        node_id: ep.node_id,
+        path_idx: ep.path_idx,
+        endpoint_type: ep.endpoint,
+        arrows: null,
+        selected_road_id: null,
+        excluded_road_ids: excludeIds,
+      },
+    }));
+
+    const params = `nodeId=${ep.node_id}&excludeRoadIds=${excludeIds.join(',')}`;
+    const res = await fetch(`/api/roads/at-node?${params}`);
+    const arrows: RoadArrow[] = await res.json();
+
+    setExtendMode((prev) => {
+      if (!prev?.modal) return prev;
+      return { ...prev, modal: { ...prev.modal, arrows } };
+    });
+  };
+
+  const handleArrowSelect = (roadId: number): void => {
+    setExtendMode((prev) => {
+      if (!prev?.modal) return prev;
+      const newSel = prev.modal.selected_road_id === roadId ? null : roadId;
+      return { ...prev, modal: { ...prev.modal, selected_road_id: newSel } };
+    });
+  };
+
+  const handleForward = async (): Promise<void> => {
+    if (!extendMode?.modal?.selected_road_id) return;
+    const modal = extendMode.modal;
+    const arrow = modal.arrows?.find((a) => a.road_id === modal.selected_road_id);
+    if (!arrow) return;
+
+    const newPending: PendingRoadItem = {
+      road_id: arrow.road_id,
+      direction: arrow.direction,
+      coords: arrow.coords,
+      new_node_id: arrow.new_node_id,
+      new_lat: arrow.new_lat,
+      new_lon: arrow.new_lon,
+    };
+
+    const newExcluded = [...modal.excluded_road_ids, arrow.road_id];
+
+    // Move modal to new position immediately with loading state
+    setExtendMode((prev) => ({
+      ...prev!,
+      pending_roads: [...prev!.pending_roads, newPending],
+      modal: {
+        ...prev!.modal!,
+        position: [arrow.new_lat, arrow.new_lon],
+        node_id: arrow.new_node_id,
+        arrows: null,
+        selected_road_id: null,
+        excluded_road_ids: newExcluded,
+      },
+    }));
+
+    const params = `nodeId=${arrow.new_node_id}&excludeRoadIds=${newExcluded.join(',')}`;
+    const res = await fetch(`/api/roads/at-node?${params}`);
+    const newArrows: RoadArrow[] = await res.json();
+
+    setExtendMode((prev) => {
+      if (!prev?.modal) return prev;
+      return { ...prev, modal: { ...prev.modal, arrows: newArrows } };
+    });
+  };
+
+  const handleSaveExtend = async (): Promise<void> => {
+    if (!extendMode || extendMode.pending_roads.length === 0) return;
+    const newRoadIds = extendMode.pending_roads.map((pr) => pr.road_id);
+    const res = await fetch(`/api/routes/${extendMode.relation_id}/extend`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ city_bbox: cityBbox, new_road_ids: newRoadIds }),
+    });
+    if (res.ok) {
+      if (cityBboxRef.current) await fetchRoutes(cityBboxRef.current);
+      setExtendMode(null);
+    }
+  };
+
   // ── Derived state ─────────────────────────────────────────────────────────────
 
   const nextLevel = selections.length + 1;
@@ -292,10 +410,16 @@ function App() {
           previewRoutes={previewRoutes}
           hoveredIndex={hoveredIndex}
           selectedIndex={selectedIndex}
+          extendMode={extendMode}
           onHoveredIndexChange={setHoveredIndex}
           onSelectedIndexChange={(index) =>
             setSelectedIndex((prev) => (prev === index ? null : index))
           }
+          onEndpointClick={handleEndpointClick}
+          onArrowSelect={handleArrowSelect}
+          onForward={handleForward}
+          onSaveAndClose={handleSaveExtend}
+          onCancelExtend={handleCancelExtend}
           onCenterChange={handleCenterChange}
           onZoomChange={handleZoomChange}
         />
@@ -311,6 +435,8 @@ function App() {
             }
             onNewRoute={() => setPanelMode('newRoute')}
             onEditNames={(rid) => setEditingRelationId(rid)}
+            onExtendRoute={handleOpenExtendMode}
+            extendingRelationId={extendMode?.relation_id}
           />
         ) : (
           <NewRoutePanel

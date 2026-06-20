@@ -425,6 +425,37 @@ function bboxToGeoJsonPolygon(bbox) {
 
 // ── Main: build route preview ──────────────────────────────────────────────────
 
+/**
+ * Build routes from an explicit list of road IDs (used when extending a route).
+ * Runs Steps 1–4 + 3.5 from the route-building algorithm.
+ */
+async function buildRouteFromRoadIds(roadIds, cityBbox, osmDb) {
+  const jpRoads = osmDb.collection('jproads');
+  const roadDocs = await jpRoads
+    .find({ id: { $in: roadIds.map(Number) } }, { projection: ROAD_PROJECTION })
+    .toArray();
+
+  const roadInfoMap = new Map();
+  for (const doc of roadDocs) {
+    const info = buildRoadInfo(doc);
+    if (info) roadInfoMap.set(info.roadId, info);
+  }
+
+  const validIds = [...roadInfoMap.keys()];
+  if (!validIds.length) {
+    return { routes: [], bbox: { minLat: 0, maxLat: 0, minLon: 0, maxLon: 0 }, highway_stat: {} };
+  }
+
+  let miniRoutes = buildInitialMiniRoutes(validIds, roadInfoMap);
+  miniRoutes = step2Chain(miniRoutes);
+  miniRoutes = step3Chain(miniRoutes);
+  if (cityBbox) miniRoutes = step35Filter(miniRoutes, cityBbox);
+  const selected = step4Select(miniRoutes);
+
+  const routes = selected.map((mr) => buildPathItems(mr)).filter((p) => p.length > 0);
+  return { routes, bbox: buildBbox(routes), highway_stat: buildHighwayStat(selected) };
+}
+
 async function buildRoutePreview(roadName, cityBbox, osmDb) {
   const jpRoads = osmDb.collection('jproads');
   const bboxPolygon = bboxToGeoJsonPolygon(cityBbox);
@@ -497,4 +528,13 @@ async function saveRoute(previewData, osmDb) {
   return { relation_id: nextRelationId, _id: result.insertedId };
 }
 
-module.exports = { buildRoutePreview, saveRoute };
+module.exports = {
+  buildRoutePreview,
+  saveRoute,
+  buildRouteFromRoadIds,
+  // Exported utilities for use in index.js
+  nodeToInt,
+  isForwardOnlyRoad,
+  bearingDegreesInt,
+  ROAD_PROJECTION,
+};

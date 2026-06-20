@@ -1,5 +1,6 @@
 import React from 'react';
 import EditIcon from '@mui/icons-material/Edit';
+import OpenWithIcon from '@mui/icons-material/OpenWith';
 import { RoutePolyline } from '../types/route';
 
 interface RoutePanelProps {
@@ -11,6 +12,8 @@ interface RoutePanelProps {
   onSelect: (index: number | null) => void;
   onNewRoute: () => void;
   onEditNames: (relation_id: number) => void;
+  onExtendRoute: (relation_id: number) => void;
+  extendingRelationId?: number;
 }
 
 const RoutePanel: React.FC<RoutePanelProps> = ({
@@ -22,6 +25,8 @@ const RoutePanel: React.FC<RoutePanelProps> = ({
   onSelect,
   onNewRoute,
   onEditNames,
+  onExtendRoute,
+  extendingRelationId,
 }) => {
   const newRouteEnabled = citySelected && zoom >= 14;
   return (
@@ -50,13 +55,22 @@ const RoutePanel: React.FC<RoutePanelProps> = ({
               </span>
               <span className="route-panel-name">{rp.name}</span>
               {rp.relation_id !== undefined && (
-                <button
-                  className="route-panel-edit-btn"
-                  title="名前を編集"
-                  onClick={(e) => { e.stopPropagation(); onEditNames(rp.relation_id!); }}
-                >
-                  <EditIcon fontSize="small" />
-                </button>
+                <>
+                  <button
+                    className="route-panel-edit-btn"
+                    title="名前を編集"
+                    onClick={(e) => { e.stopPropagation(); onEditNames(rp.relation_id!); }}
+                  >
+                    <EditIcon fontSize="small" />
+                  </button>
+                  <button
+                    className={`route-panel-edit-btn route-panel-extend-btn${extendingRelationId === rp.relation_id ? ' route-panel-extend-btn--active' : ''}`}
+                    title="経路を延長"
+                    onClick={(e) => { e.stopPropagation(); onExtendRoute(rp.relation_id!); }}
+                  >
+                    <OpenWithIcon fontSize="small" />
+                  </button>
+                </>
               )}
             </div>
           );

@@ -175,6 +175,8 @@ body,
 }
 
 .route-panel-name {
+  flex: 1;
+  min-width: 0;
   word-break: break-all;
   line-height: 1.3;
 }
@@ -416,7 +418,113 @@ body,
   animation: routePreviewBlink 0.8s ease-in-out infinite;
 }
 
-/* ── Route panel edit button ─────────────────────────────────────────────── */
+/* ── Route panel extend button ───────────────────────────────────────────── */
+.route-panel-extend-btn {
+  color: #888;
+}
+
+.route-panel-extend-btn--active {
+  color: #f97316 !important;
+}
+
+/* ── Endpoint marker icon ────────────────────────────────────────────────── */
+.endpoint-marker-icon {
+  cursor: pointer;
+  filter: drop-shadow(0 1px 2px rgba(0,0,0,0.4));
+}
+
+/* ── Extend route modal (portal into map container) ─────────────────────── */
+.extend-modal {
+  position: absolute;
+  background: rgba(255, 255, 255, 0.88);
+  border: 2px solid #b0b0b0;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  z-index: 1500;
+  user-select: none;
+}
+
+.extend-modal-close {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  color: #555;
+  padding: 2px 5px;
+  border-radius: 3px;
+  z-index: 1;
+  line-height: 1;
+}
+
+.extend-modal-close:hover {
+  background: #eee;
+  color: #111;
+}
+
+.extend-modal-buttons {
+  display: flex;
+  gap: 6px;
+  padding: 6px 10px 10px;
+  justify-content: center;
+}
+
+.extend-modal-btn {
+  padding: 5px 12px;
+  border: none;
+  border-radius: 4px;
+  font-size: 13px;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.extend-modal-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.extend-modal-btn-save {
+  background: #0f766e;
+  color: white;
+}
+
+.extend-modal-btn-save:hover:not(:disabled) {
+  background: #0d6b63;
+}
+
+.extend-modal-btn-forward {
+  background: #2563eb;
+  color: white;
+}
+
+.extend-modal-btn-forward:hover:not(:disabled) {
+  background: #1d4ed8;
+}
+
+.extend-modal-btn-cancel {
+  background: #e5e7eb;
+  color: #333;
+}
+
+.extend-modal-btn-cancel:hover {
+  background: #d1d5db;
+}
+
+/* Loading spinner inside extend modal */
+.extend-modal-spinner {
+  width: 36px;
+  height: 36px;
+  border: 4px solid #e0e0e0;
+  border-top-color: #0f766e;
+  border-radius: 50%;
+  animation: extendSpinnerRotate 0.7s linear infinite;
+}
+
+@keyframes extendSpinnerRotate {
+  to { transform: rotate(360deg); }
+}
 .route-panel-edit-btn {
   margin-left: auto;
   flex-shrink: 0;

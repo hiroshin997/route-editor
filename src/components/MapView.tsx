@@ -2,7 +2,8 @@ import React, { useEffect, useRef } from 'react';
 import { MapContainer, TileLayer, GeoJSON, Polyline, Marker, Tooltip, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { RoutePolyline } from '../types/route';
+import { RoutePolyline, EndpointInfo, ExtendModeState } from '../types/route';
+import ExtendRouteOverlay from './ExtendRouteOverlay';
 
 // Fix default marker icon paths broken by webpack
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -156,8 +157,14 @@ interface MapViewProps {
   previewRoutes: RoutePolyline[];
   hoveredIndex: number | null;
   selectedIndex: number | null;
+  extendMode: ExtendModeState | null;
   onHoveredIndexChange: (index: number | null) => void;
   onSelectedIndexChange: (index: number | null) => void;
+  onEndpointClick: (ep: EndpointInfo) => void;
+  onArrowSelect: (roadId: number) => void;
+  onForward: () => void;
+  onSaveAndClose: () => void;
+  onCancelExtend: () => void;
   onCenterChange: (center: [number, number]) => void;
   onZoomChange: (zoom: number) => void;
 }
@@ -171,8 +178,14 @@ const MapView: React.FC<MapViewProps> = ({
   previewRoutes,
   hoveredIndex,
   selectedIndex,
+  extendMode,
   onHoveredIndexChange,
   onSelectedIndexChange,
+  onEndpointClick,
+  onArrowSelect,
+  onForward,
+  onSaveAndClose,
+  onCancelExtend,
   onCenterChange,
   onZoomChange,
 }) => {
@@ -241,6 +254,14 @@ const MapView: React.FC<MapViewProps> = ({
             pathOptions={{ color: 'red', weight: 3, dashArray: '8 6', className: 'route-preview-blink' }}
           />
         ))}
+        <ExtendRouteOverlay
+          extendMode={extendMode}
+          onEndpointClick={onEndpointClick}
+          onArrowSelect={onArrowSelect}
+          onForward={onForward}
+          onSaveAndClose={onSaveAndClose}
+          onCancelExtend={onCancelExtend}
+        />
       </MapContainer>
     </div>
   );

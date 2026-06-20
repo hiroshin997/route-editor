@@ -44,3 +44,56 @@ export interface RoutePolyline {
   /** Original relation_id from jproad_routes (undefined for preview routes) */
   relation_id?: number;
 }
+
+// ── Route extension types ─────────────────────────────────────────────────────
+
+export interface EndpointInfo {
+  path_idx: number;
+  endpoint: 'start' | 'end';
+  lat: number;
+  lon: number;
+  node_id: number;
+  road_id: number;
+}
+
+export interface RoadArrow {
+  road_id: number;
+  name: string;
+  bearing: number;       // 0–360 travel bearing from junction
+  enter_from_start: boolean;
+  direction: 'ascend' | 'descend';
+  oneway: boolean;
+  new_node_id: number;
+  new_lat: number;
+  new_lon: number;
+  coords: [number, number][]; // [lat, lon] in travel direction
+  width_m: number;
+  highway: string | null;
+}
+
+export interface PendingRoadItem {
+  road_id: number;
+  direction: 'ascend' | 'descend';
+  coords: [number, number][];
+  new_node_id: number;
+  new_lat: number;
+  new_lon: number;
+}
+
+export interface ExtendModalState {
+  position: [number, number]; // [lat, lon]
+  node_id: number;
+  path_idx: number;
+  endpoint_type: 'start' | 'end';
+  /** null = loading */
+  arrows: RoadArrow[] | null;
+  selected_road_id: number | null;
+  excluded_road_ids: number[];
+}
+
+export interface ExtendModeState {
+  relation_id: number;
+  endpoints: EndpointInfo[];
+  modal: ExtendModalState | null;
+  pending_roads: PendingRoadItem[];
+}

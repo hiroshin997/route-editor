@@ -4,7 +4,7 @@ const express = require('express');
 const { MongoClient } = require('mongodb');
 const cors = require('cors');
 
-const { buildRoutePreview, saveRoute } = require('./routeBuilder');
+const { buildRoutePreview, saveRoute, buildRouteFromRoadIds, nodeToInt, isForwardOnlyRoad, bearingDegreesInt, ROAD_PROJECTION } = require('./routeBuilder');
 
 const app = express();
 const PORT = 5000;
@@ -274,6 +274,208 @@ app.get('/api/routes/in-bbox', async (req, res) => {
   }
 });
 
+// ── Route extension endpoints ─────────────────────────────────────────────────
+
+/**
+ * GET /api/routes/:relation_id/endpoints
+ * Returns start/end endpoint info (lat, lon, node_id, road_id) for each path.
+ */
+app.get('/api/routes/:relation_id/endpoints', async (req, res) => {
+  try {
+    const relation_id = parseInt(req.params.relation_id, 10);
+    const doc = await osmDb.collection(ROUTES_COLLECTION).findOne(
+      { relation_id },
+      { projection: { routes: 1, _id: 0 } }
+    );
+    if (!doc) return res.status(404).json({ error: 'Not found' });
+
+    const jpRoads = osmDb.collection('jproads');
+    const endpoints = [];
+
+    for (let i = 0; i < (doc.routes || []).length; i++) {
+      const path = doc.routes[i];
+      if (!path || !path.length) continue;
+
+      const firstRoad = path[0];
+      const lastRoad = path[path.length - 1];
+      const firstSectors = firstRoad.road_sectors || [];
+      const lastSectors = lastRoad.road_sectors || [];
+      if (!firstSectors.length || !lastSectors.length) continue;
+
+      const firstDir = firstSectors[0].direction;
+      const lastDir = lastSectors[0].direction;
+
+      // Start endpoint: lookup from_node/to_node from jproads
+      const firstRoadDoc = await jpRoads.findOne(
+        { id: parseInt(firstRoad.road_id, 10) },
+        { projection: { from_node: 1, to_node: 1, _id: 0 } }
+      );
+      const startNodeId = firstDir === 'ascend'
+        ? nodeToInt(firstRoadDoc?.from_node) : nodeToInt(firstRoadDoc?.to_node);
+      const startLat = firstDir === 'ascend' ? firstSectors[0].lat0 : firstSectors[0].lat1;
+      const startLon = firstDir === 'ascend' ? firstSectors[0].lon0 : firstSectors[0].lon1;
+
+      // End endpoint
+      const lastRoadDoc = await jpRoads.findOne(
+        { id: parseInt(lastRoad.road_id, 10) },
+        { projection: { from_node: 1, to_node: 1, _id: 0 } }
+      );
+      const lastSector = lastSectors[lastSectors.length - 1];
+      const endNodeId = lastDir === 'ascend'
+        ? nodeToInt(lastRoadDoc?.to_node) : nodeToInt(lastRoadDoc?.from_node);
+      const endLat = lastDir === 'ascend' ? lastSector.lat1 : lastSector.lat0;
+      const endLon = lastDir === 'ascend' ? lastSector.lon1 : lastSector.lon0;
+
+      endpoints.push({ path_idx: i, endpoint: 'start', lat: startLat, lon: startLon, node_id: startNodeId, road_id: parseInt(firstRoad.road_id, 10) });
+      endpoints.push({ path_idx: i, endpoint: 'end',   lat: endLat,   lon: endLon,   node_id: endNodeId,   road_id: parseInt(lastRoad.road_id, 10)  });
+    }
+
+    res.json(endpoints);
+  } catch (err) {
+    console.error('/api/routes/:id/endpoints error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * GET /api/roads/at-node?nodeId=&excludeRoadIds=
+ * Returns roads connected to nodeId with bearing and travel-direction info.
+ * One-way roads where the junction is at to_node are omitted.
+ */
+app.get('/api/roads/at-node', async (req, res) => {
+  try {
+    const nodeId = parseInt(req.query.nodeId, 10);
+    if (isNaN(nodeId)) return res.status(400).json({ error: 'Invalid nodeId' });
+
+    const excludeIds = (req.query.excludeRoadIds || '')
+      .split(',').map((s) => parseInt(s.trim(), 10)).filter((n) => !isNaN(n));
+
+    const jpRoads = osmDb.collection('jproads');
+    const query = { node_ref: nodeId };
+    if (excludeIds.length) query.id = { $nin: excludeIds };
+
+    const docs = await jpRoads.find(query, { projection: ROAD_PROJECTION }).toArray();
+
+    const WIDTH_BY_HW = { motorway: 12, primary: 9, secondary: 7, residential: 5, service: 3.5 };
+    const results = [];
+
+    for (const doc of docs) {
+      const coords = doc?.centerline?.coordinates;
+      if (!coords || coords.length < 2) continue;
+
+      const fromNode = nodeToInt(doc.from_node);
+      const toNode   = nodeToInt(doc.to_node);
+      const nodeRefs = (doc.node_ref || []).map((v) => nodeToInt(v));
+      const oneway   = isForwardOnlyRoad(doc.oneway);
+      const roadId   = nodeToInt(doc.id);
+      if (roadId === null) continue;
+
+      const widthM = doc.width_m != null
+        ? parseFloat(doc.width_m)
+        : (WIDTH_BY_HW[doc.highway] || 7);
+
+      const isAtStart = fromNode === nodeId || (nodeRefs.length > 0 && nodeRefs[0] === nodeId);
+      const isAtEnd   = toNode   === nodeId || (nodeRefs.length > 0 && nodeRefs[nodeRefs.length - 1] === nodeId);
+
+      if (!isAtStart && !isAtEnd) continue; // intermediate node – skip
+
+      // Entry from start → ascending travel
+      if (isAtStart) {
+        results.push({
+          road_id: roadId,
+          name: doc.name || '',
+          bearing: bearingDegreesInt(coords[0][0], coords[0][1], coords[1][0], coords[1][1]),
+          enter_from_start: true,
+          direction: 'ascend',
+          oneway,
+          new_node_id: toNode,
+          new_lat: coords[coords.length - 1][1],
+          new_lon: coords[coords.length - 1][0],
+          coords: coords.map((c) => [c[1], c[0]]),        // [lat, lon]
+          width_m: widthM,
+          highway: doc.highway || null,
+        });
+      }
+
+      // Entry from end → descending travel (bidirectional only)
+      if (isAtEnd && !oneway && !isAtStart) {
+        const n = coords.length;
+        results.push({
+          road_id: roadId,
+          name: doc.name || '',
+          bearing: bearingDegreesInt(coords[n-1][0], coords[n-1][1], coords[n-2][0], coords[n-2][1]),
+          enter_from_start: false,
+          direction: 'descend',
+          oneway,
+          new_node_id: fromNode,
+          new_lat: coords[0][1],
+          new_lon: coords[0][0],
+          coords: [...coords].reverse().map((c) => [c[1], c[0]]),  // reversed [lat, lon]
+          width_m: widthM,
+          highway: doc.highway || null,
+        });
+      }
+    }
+
+    res.json(results);
+  } catch (err) {
+    console.error('/api/roads/at-node error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /api/routes/:relation_id/extend
+ * Body: { city_bbox, new_road_ids }
+ * Appends new roads to the route, rebuilds doc.routes via Step1–Step4, saves.
+ */
+app.post('/api/routes/:relation_id/extend', async (req, res) => {
+  try {
+    const relation_id = parseInt(req.params.relation_id, 10);
+    const { city_bbox, new_road_ids } = req.body;
+    if (!Array.isArray(new_road_ids) || !new_road_ids.length) {
+      return res.status(400).json({ error: 'new_road_ids required' });
+    }
+
+    const col = osmDb.collection(ROUTES_COLLECTION);
+    const doc = await col.findOne({ relation_id }, { projection: { routes: 1, _id: 0 } });
+    if (!doc) return res.status(404).json({ error: 'Not found' });
+
+    // Collect existing road IDs from current doc.routes
+    const existingIds = new Set();
+    for (const path of (doc.routes || [])) {
+      for (const item of path) {
+        const id = parseInt(item.road_id, 10);
+        if (!isNaN(id)) existingIds.add(id);
+      }
+    }
+
+    const allIds = [...existingIds, ...new_road_ids.map(Number)];
+    const rebuilt = await buildRouteFromRoadIds(allIds, city_bbox || null, osmDb);
+
+    // ISO datetime in JST
+    const pad = (n) => String(n).padStart(2, '0');
+    const jst = new Date(Date.now() + 9 * 3600 * 1000);
+    const updated_at = `${jst.getUTCFullYear()}-${pad(jst.getUTCMonth()+1)}-${pad(jst.getUTCDate())}T${pad(jst.getUTCHours())}:${pad(jst.getUTCMinutes())}:${pad(jst.getUTCSeconds())}+09:00`;
+
+    await col.updateOne(
+      { relation_id },
+      { $set: {
+        routes: rebuilt.routes,
+        bbox: rebuilt.bbox,
+        highway_stat: rebuilt.highway_stat,
+        roads: allIds.map((id) => ({ road_id: id, role: '' })),
+        updated_at,
+      }}
+    );
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('/api/routes/:id/extend error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Route names GET / PUT ─────────────────────────────────────────────────────
 
 /**
@@ -310,9 +512,13 @@ app.put('/api/routes/:relation_id/names', async (req, res) => {
     const { names } = req.body;
     if (!Array.isArray(names)) return res.status(400).json({ error: 'names array required' });
 
+    const pad = (n) => String(n).padStart(2, '0');
+    const jst = new Date(Date.now() + 9 * 3600 * 1000);
+    const updated_at = `${jst.getUTCFullYear()}-${pad(jst.getUTCMonth()+1)}-${pad(jst.getUTCDate())}T${pad(jst.getUTCHours())}:${pad(jst.getUTCMinutes())}:${pad(jst.getUTCSeconds())}+09:00`;
+
     await osmDb.collection(ROUTES_COLLECTION).updateOne(
       { relation_id },
-      { $set: { names } }
+      { $set: { names, updated_at } }
     );
     res.json({ ok: true });
   } catch (err) {
