@@ -7,16 +7,21 @@ export interface RoadSector {
   heading: number;
   direction: 'ascend' | 'descend';
   length_m: number;
-  node_id: string;
+  /** Node at the min (from_node) end of this sector */
+  min_node_id: number;
+  /** Node at the max (to_node) end of this sector */
+  max_node_id: number;
 }
 
 export interface RoadObject {
-  road_id: string;
+  road_id: number;
   oneway: boolean;
   width_m: number;
   road_sectors: RoadSector[];
-  min_side_road_id: string;
-  max_side_road_id: string;
+  /** Integer road_id of the preceding road, -1 if none */
+  min_side_road_id: number;
+  /** Integer road_id of the following road, -1 if none */
+  max_side_road_id: number;
 }
 
 /** One document from jproad_routes collection. */

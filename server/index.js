@@ -340,8 +340,8 @@ app.put('/api/routes/:relation_id/trim', async (req, res) => {
     // Enforce -1 on new endpoint side-road IDs
     const updated = new_roads.map((r, i) => {
       let road = { ...r };
-      if (i === 0) road = { ...road, min_side_road_id: '-1' };
-      if (i === new_roads.length - 1) road = { ...road, max_side_road_id: '-1' };
+      if (i === 0) road = { ...road, min_side_road_id: -1 };
+      if (i === new_roads.length - 1) road = { ...road, max_side_road_id: -1 };
       return road;
     });
 
@@ -389,26 +389,18 @@ app.get('/api/routes/:relation_id/endpoints', async (req, res) => {
       if (!firstSectors.length || !lastSectors.length) continue;
 
       const firstDir = firstSectors[0].direction;
-      const lastDir = lastSectors[0].direction;
-
-      // Start endpoint: lookup from_node/to_node from jproads
-      const firstRoadDoc = await jpRoads.findOne(
-        { id: parseInt(firstRoad.road_id, 10) },
-        { projection: { from_node: 1, to_node: 1, _id: 0 } }
-      );
+      // Use min/max_node_id embedded in road_sectors (no jproads lookup needed)
       const startNodeId = firstDir === 'ascend'
-        ? nodeToInt(firstRoadDoc?.from_node) : nodeToInt(firstRoadDoc?.to_node);
+        ? firstSectors[0].min_node_id
+        : firstSectors[0].max_node_id;
       const startLat = firstDir === 'ascend' ? firstSectors[0].lat0 : firstSectors[0].lat1;
       const startLon = firstDir === 'ascend' ? firstSectors[0].lon0 : firstSectors[0].lon1;
 
-      // End endpoint
-      const lastRoadDoc = await jpRoads.findOne(
-        { id: parseInt(lastRoad.road_id, 10) },
-        { projection: { from_node: 1, to_node: 1, _id: 0 } }
-      );
       const lastSector = lastSectors[lastSectors.length - 1];
+      const lastDir = lastSectors[0].direction;
       const endNodeId = lastDir === 'ascend'
-        ? nodeToInt(lastRoadDoc?.to_node) : nodeToInt(lastRoadDoc?.from_node);
+        ? lastSector.max_node_id
+        : lastSector.min_node_id;
       const endLat = lastDir === 'ascend' ? lastSector.lat1 : lastSector.lat0;
       const endLon = lastDir === 'ascend' ? lastSector.lon1 : lastSector.lon0;
 

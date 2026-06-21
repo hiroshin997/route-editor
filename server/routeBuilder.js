@@ -122,7 +122,8 @@ function buildRoadSectorsAscend(road) {
       heading: bearingDegreesInt(lon0, lat0, lon1, lat1),
       direction: 'ascend',
       length_m: Math.round(hubenyJapanM(lat0, lon0, lat1, lon1)),
-      node_id: i < road.nodeRefs.length ? String(road.nodeRefs[i]) : '-1',
+      min_node_id: i     < road.nodeRefs.length ? road.nodeRefs[i]     : -1,
+      max_node_id: i + 1 < road.nodeRefs.length ? road.nodeRefs[i + 1] : -1,
     });
   }
   return sectors;
@@ -333,11 +334,11 @@ function buildPathItems(miniRoute) {
     const entry = roads[i];
     const sectors = entry.road_sectors || [];
     if (!sectors.length) continue;
-    const prevId = i > 0 ? String(roads[i - 1].road_id) : '-1';
-    const nextId = i < n - 1 ? String(roads[i + 1].road_id) : '-1';
+    const prevId = i > 0     ? (parseInt(roads[i - 1].road_id, 10) || -1) : -1;
+    const nextId = i < n - 1 ? (parseInt(roads[i + 1].road_id, 10) || -1) : -1;
     const dir = sectors[0]?.direction;
     items.push({
-      road_id: String(entry.road_id),
+      road_id: parseInt(entry.road_id, 10) || entry.road_id,
       oneway: entry.oneway,
       width_m: entry.width_m,
       road_sectors: sectors,
