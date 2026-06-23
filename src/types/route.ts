@@ -24,12 +24,17 @@ export interface RoadObject {
   max_side_road_id: number;
 }
 
+/** One path within a route document (routes[i]). */
+export interface RoutePath {
+  roads: RoadObject[];
+}
+
 /** One document from jproad_routes collection. */
 export interface RouteDoc {
   relation_id: number;
   name: string;
-  /** routes[i] = ordered array of RoadObjects that form one continuous polyline */
-  routes: RoadObject[][];
+  /** routes[i] = one path object containing an ordered array of RoadObjects */
+  routes: RoutePath[];
 }
 
 export interface BBox {

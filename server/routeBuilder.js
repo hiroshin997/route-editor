@@ -352,7 +352,7 @@ function buildPathItems(miniRoute) {
 function buildBbox(routes) {
   let minLat = Infinity, maxLat = -Infinity, minLon = Infinity, maxLon = -Infinity;
   for (const path of routes) {
-    for (const item of path) {
+    for (const item of (path.roads || [])) {
       for (const s of (item.road_sectors || [])) {
         if (s.lat0 < minLat) minLat = s.lat0; if (s.lat0 > maxLat) maxLat = s.lat0;
         if (s.lat1 < minLat) minLat = s.lat1; if (s.lat1 > maxLat) maxLat = s.lat1;
@@ -453,7 +453,9 @@ async function buildRouteFromRoadIds(roadIds, cityBbox, osmDb) {
   if (cityBbox) miniRoutes = step35Filter(miniRoutes, cityBbox);
   const selected = step4Select(miniRoutes);
 
-  const routes = selected.map((mr) => buildPathItems(mr)).filter((p) => p.length > 0);
+  const routes = selected
+    .map((mr) => ({ roads: buildPathItems(mr) }))
+    .filter((p) => p.roads.length > 0);
   return { routes, bbox: buildBbox(routes), highway_stat: buildHighwayStat(selected) };
 }
 
@@ -485,7 +487,9 @@ async function buildRoutePreview(roadName, cityBbox, osmDb) {
   miniRoutes = step35Filter(miniRoutes, cityBbox);
   const selected = step4Select(miniRoutes);
 
-  const routes = selected.map((mr) => buildPathItems(mr)).filter((p) => p.length > 0);
+  const routes = selected
+    .map((mr) => ({ roads: buildPathItems(mr) }))
+    .filter((p) => p.roads.length > 0);
   return {
     routes,
     bbox: buildBbox(routes),
@@ -509,7 +513,7 @@ async function saveRoute(previewData, osmDb) {
 
   const allRoadIds = new Set();
   for (const path of previewData.routes) {
-    for (const item of path) allRoadIds.add(String(item.road_id));
+    for (const item of (path.roads || [])) allRoadIds.add(String(item.road_id));
   }
   const roads = [...allRoadIds].map((rid) => ({ road_id: parseInt(rid, 10) || rid, role: '' }));
 

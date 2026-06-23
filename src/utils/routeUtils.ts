@@ -73,7 +73,7 @@ export function computeRoutePolylines(docs: RouteDoc[], _bbox: BBox | null): Rou
   let index = 1;
   for (const doc of docs) {
     for (let i = 0; i < doc.routes.length; i++) {
-      const routeArray = doc.routes[i];
+      const routeArray = doc.routes[i].roads;
       const coords = buildPolylineCoords(routeArray);
       if (coords.length === 0) continue;
       result.push({

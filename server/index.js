@@ -198,9 +198,9 @@ function segmentIntersectsBbox(lon0, lat0, lon1, lat1, bbox) {
   );
 }
 
-function subRouteIntersectsBbox(routeArray, bbox) {
-  if (!Array.isArray(routeArray)) return false;
-  for (const road of routeArray) {
+function subRouteIntersectsBbox(routeObj, bbox) {
+  const roads = Array.isArray(routeObj) ? routeObj : (routeObj?.roads || []);
+  for (const road of roads) {
     if (!Array.isArray(road.road_sectors)) continue;
     for (const s of road.road_sectors) {
       if (segmentIntersectsBbox(s.lon0, s.lat0, s.lon1, s.lat1, bbox)) {
@@ -279,7 +279,7 @@ app.get('/api/routes/in-bbox', async (req, res) => {
 function computeBboxFromPaths(routes) {
   let minLat = Infinity, maxLat = -Infinity, minLon = Infinity, maxLon = -Infinity;
   for (const path of (routes || [])) {
-    for (const item of (path || [])) {
+    for (const item of (path?.roads || [])) {
       for (const s of (item.road_sectors || [])) {
         if (s.lat0 < minLat) minLat = s.lat0; if (s.lat0 > maxLat) maxLat = s.lat0;
         if (s.lat1 < minLat) minLat = s.lat1; if (s.lat1 > maxLat) maxLat = s.lat1;
@@ -312,7 +312,7 @@ app.get('/api/routes/:relation_id/roads', async (req, res) => {
     const path = (doc.routes || [])[path_idx];
     if (!path) return res.status(404).json({ error: 'Path not found' });
 
-    res.json(path);
+    res.json(path.roads || []);
   } catch (err) {
     console.error('/api/routes/:id/roads error:', err);
     res.status(500).json({ error: err.message });
@@ -345,7 +345,7 @@ app.put('/api/routes/:relation_id/trim', async (req, res) => {
       return road;
     });
 
-    const routes = (doc.routes || []).map((p, i) => (i === path_idx ? updated : p));
+    const routes = (doc.routes || []).map((p, i) => (i === path_idx ? { ...p, roads: updated } : p));
     const bbox = computeBboxFromPaths(routes);
 
     const pad = (n) => String(n).padStart(2, '0');
@@ -382,8 +382,11 @@ app.get('/api/routes/:relation_id/endpoints', async (req, res) => {
       const path = doc.routes[i];
       if (!path || !path.length) continue;
 
-      const firstRoad = path[0];
-      const lastRoad = path[path.length - 1];
+      const pathRoads = path?.roads || [];
+      if (!pathRoads.length) continue;
+
+      const firstRoad = pathRoads[0];
+      const lastRoad = pathRoads[pathRoads.length - 1];
       const firstSectors = firstRoad.road_sectors || [];
       const lastSectors = lastRoad.road_sectors || [];
       if (!firstSectors.length || !lastSectors.length) continue;
@@ -522,7 +525,7 @@ app.post('/api/routes/:relation_id/extend', async (req, res) => {
     // Collect existing road IDs from current doc.routes
     const existingIds = new Set();
     for (const path of (doc.routes || [])) {
-      for (const item of path) {
+      for (const item of (path.roads || [])) {
         const id = parseInt(item.road_id, 10);
         if (!isNaN(id)) existingIds.add(id);
       }
