@@ -118,9 +118,9 @@ body,
   width: 100%;
 }
 
-/* ── Route panel ─────────────────────────────────────────────────────────── */
+/* ── Route panel (wider to fit 4 action buttons) ─────────────────────────── */
 .route-panel {
-  width: 220px;
+  width: 330px;
   overflow-y: auto;
   border-left: 1px solid #d0d0d0;
   background: #fff;
@@ -419,15 +419,118 @@ body,
 }
 
 /* ── Route panel trim button ─────────────────────────────────────────────── */
-.route-panel-trim-btn {
-  color: #888;
+.route-panel-trim-btn { color: #888; }
+.route-panel-trim-btn--active { color: #f97316 !important; }
+
+/* ── Route panel intersection button ────────────────────────────────────── */
+.route-panel-intersection-btn { color: #888; }
+.route-panel-intersection-btn--active { color: #eab308 !important; }
+
+/* ── IntersectionPanel ───────────────────────────────────────────────────── */
+.intersection-panel {
+  width: 330px;
+  border-left: 1px solid #d0d0d0;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  padding: 10px 10px 12px;
 }
 
-.route-panel-trim-btn--active {
-  color: #f97316 !important;
+.intersection-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
 }
 
-/* ── Scissors marker icon ────────────────────────────────────────────────── */
+.intersection-panel-title { font-size: 14px; font-weight: bold; color: #333; }
+
+.intersection-panel-close {
+  background: none; border: none; cursor: pointer; color: #666;
+  padding: 2px 4px; border-radius: 3px; line-height: 0;
+}
+.intersection-panel-close:hover { background: #eee; }
+
+.intersection-panel-buttons { display: flex; gap: 8px; }
+
+.intersection-panel-btn {
+  flex: 1; padding: 6px 8px; border: none; border-radius: 4px;
+  font-size: 13px; font-weight: 500; cursor: pointer;
+}
+.intersection-panel-save-btn { background: #0f766e; color: white; }
+.intersection-panel-save-btn:disabled { background: #ccc; cursor: not-allowed; }
+.intersection-panel-cancel-btn { background: #e5e7eb; color: #333; }
+.intersection-panel-cancel-btn:hover { background: #d1d5db; }
+
+/* ── Intersection map marker ─────────────────────────────────────────────── */
+.intersection-icon {
+  background: none !important;
+  border: none !important;
+  overflow: visible !important;
+}
+
+.intersection-marker-wrap {
+  display: flex; align-items: center; white-space: nowrap;
+  pointer-events: all; cursor: pointer;
+}
+
+.intersection-tl {
+  width: 16px; height: 22px;
+  background: #f59e0b; border: 1.5px solid #555; border-radius: 3px;
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: space-evenly; padding: 2px; flex-shrink: 0;
+}
+.tl-dot { width: 5px; height: 5px; border-radius: 50%; }
+.tl-red   { background: #ef4444; }
+.tl-amber { background: #fbbf24; }
+.tl-green { background: #22c55e; }
+
+.intersection-name-label {
+  background: #fef08a; color: #000; border: 1.5px solid #555;
+  border-radius: 2px; padding: 1px 5px; font-size: 11px;
+  font-weight: bold; margin-left: 3px; max-width: 200px;
+  overflow: hidden; text-overflow: ellipsis;
+}
+
+/* ── Intersection context menu ───────────────────────────────────────────── */
+.intersection-ctx-menu {
+  position: absolute; z-index: 2000;
+  background: #fff; border: 1px solid #ccc;
+  border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,.2);
+  min-width: 140px; overflow: hidden;
+}
+.ctx-menu-item {
+  padding: 7px 14px; font-size: 13px; cursor: pointer;
+}
+.ctx-menu-item:hover { background: #f0f0f0; }
+
+/* ── Intersection dialog ─────────────────────────────────────────────────── */
+.intersection-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.35);
+  display: flex; align-items: center; justify-content: center; z-index: 10000;
+}
+.intersection-dialog {
+  background: #fff; border-radius: 8px; padding: 20px 22px 16px;
+  min-width: 280px; box-shadow: 0 4px 20px rgba(0,0,0,.25);
+}
+.intersection-dialog-msg { margin: 0 0 12px; font-size: 13px; color: #333; }
+.intersection-dialog-input {
+  width: 100%; padding: 6px 8px; border: 1px solid #ccc;
+  border-radius: 4px; font-size: 13px; box-sizing: border-box; margin-bottom: 12px;
+}
+.intersection-dialog-buttons { display: flex; gap: 8px; justify-content: flex-end; }
+.intersection-dialog-ok {
+  padding: 5px 16px; background: #0f766e; color: #fff;
+  border: none; border-radius: 4px; cursor: pointer; font-size: 13px;
+}
+.intersection-dialog-cancel {
+  padding: 5px 16px; background: #e5e7eb; color: #333;
+  border: none; border-radius: 4px; cursor: pointer; font-size: 13px;
+}
+.intersection-dialog-cancel:hover { background: #d1d5db; }
 .scissors-marker-icon {
   cursor: pointer;
   filter: drop-shadow(0 1px 2px rgba(0,0,0,0.35));

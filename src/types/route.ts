@@ -27,6 +27,7 @@ export interface RoadObject {
 /** One path within a route document (routes[i]). */
 export interface RoutePath {
   roads: RoadObject[];
+  intersection_group_key?: string;
 }
 
 /** One document from jproad_routes collection. */
@@ -35,6 +36,36 @@ export interface RouteDoc {
   name: string;
   /** routes[i] = one path object containing an ordered array of RoadObjects */
   routes: RoutePath[];
+}
+
+// ── Intersection types ────────────────────────────────────────────────────────
+
+export interface Intersection {
+  intersection_id: number;
+  name: string;
+  road_id: number;
+  coord_index: number;
+  lat: number;
+  lon: number;
+}
+
+export interface IntersectionModeState {
+  relation_id: number;
+  path_idx: number;
+  groups_key: string | null;         // null = new path, key created on save
+  originalIntersections: Intersection[];
+  currentIntersections: Intersection[];
+  roadItems: any[];                  // for snapping
+  originalGroups: Record<string, Intersection[]>;  // full intersection_groups for save
+  allRoutesKeys: (string | null)[];  // routes[i].intersection_group_key
+  nextId: number;                    // next id to assign (>= 999000000001)
+}
+
+export interface DisplayIntersectionState {
+  relation_id: number;
+  path_idx: number;
+  groups_key: string | null;
+  intersections: Intersection[];
 }
 
 export interface BBox {

@@ -274,6 +274,66 @@ app.get('/api/routes/in-bbox', async (req, res) => {
   }
 });
 
+// ── Intersection endpoints ────────────────────────────────────────────────────
+
+/**
+ * GET /api/routes/:relation_id/intersections
+ * Returns { routes_keys, intersection_groups } for the specified route doc.
+ */
+app.get('/api/routes/:relation_id/intersections', async (req, res) => {
+  try {
+    const relation_id = parseInt(req.params.relation_id, 10);
+    const doc = await osmDb.collection(ROUTES_COLLECTION).findOne(
+      { relation_id },
+      { projection: { routes: 1, intersection_groups: 1, _id: 0 } }
+    );
+    if (!doc) return res.status(404).json({ error: 'Not found' });
+
+    const routes_keys = (doc.routes || []).map((r) => r.intersection_group_key ?? null);
+    res.json({
+      routes_keys,
+      intersection_groups: doc.intersection_groups || {},
+    });
+  } catch (err) {
+    console.error('/api/routes/:id/intersections GET error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * PUT /api/routes/:relation_id/intersections
+ * Body: { intersection_groups, routes_key_updates: [{path_idx, key}] }
+ * Updates intersection_groups, sets any new routes[i].intersection_group_key, updates updated_at.
+ */
+app.put('/api/routes/:relation_id/intersections', async (req, res) => {
+  try {
+    const relation_id = parseInt(req.params.relation_id, 10);
+    const { intersection_groups, routes_key_updates = [] } = req.body;
+    if (!intersection_groups) return res.status(400).json({ error: 'intersection_groups required' });
+
+    const col = osmDb.collection(ROUTES_COLLECTION);
+    const doc = await col.findOne({ relation_id }, { projection: { routes: 1, _id: 0 } });
+    if (!doc) return res.status(404).json({ error: 'Not found' });
+
+    const pad = (n) => String(n).padStart(2, '0');
+    const jst = new Date(Date.now() + 9 * 3600 * 1000);
+    const updated_at = `${jst.getUTCFullYear()}-${pad(jst.getUTCMonth()+1)}-${pad(jst.getUTCDate())}T${pad(jst.getUTCHours())}:${pad(jst.getUTCMinutes())}:${pad(jst.getUTCSeconds())}+09:00`;
+
+    const $set = { intersection_groups, updated_at };
+
+    // Apply any new intersection_group_key values to routes
+    for (const { path_idx, key } of routes_key_updates) {
+      $set[`routes.${path_idx}.intersection_group_key`] = key;
+    }
+
+    await col.updateOne({ relation_id }, { $set });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('/api/routes/:id/intersections PUT error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Route trim endpoints ───────────────────────────────────────────────────────
 
 function computeBboxFromPaths(routes) {
@@ -380,7 +440,7 @@ app.get('/api/routes/:relation_id/endpoints', async (req, res) => {
 
     for (let i = 0; i < (doc.routes || []).length; i++) {
       const path = doc.routes[i];
-      if (!path || !path.length) continue;
+      if (!path) continue;
 
       const pathRoads = path?.roads || [];
       if (!pathRoads.length) continue;

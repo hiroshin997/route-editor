@@ -2,9 +2,10 @@ import React, { useEffect, useRef } from 'react';
 import { MapContainer, TileLayer, GeoJSON, Polyline, Marker, Tooltip, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { RoutePolyline, EndpointInfo, ExtendModeState, TrimModeState } from '../types/route';
+import { RoutePolyline, EndpointInfo, ExtendModeState, TrimModeState, Intersection } from '../types/route';
 import ExtendRouteOverlay from './ExtendRouteOverlay';
 import TrimRouteOverlay from './TrimRouteOverlay';
+import IntersectionOverlay, { IntersectionOverlayProps } from './IntersectionOverlay';
 
 // Fix default marker icon paths broken by webpack
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -160,6 +161,11 @@ interface MapViewProps {
   selectedIndex: number | null;
   extendMode: ExtendModeState | null;
   trimMode: TrimModeState | null;
+  /** Intersections to display (display mode or edit mode) */
+  intersections: Intersection[];
+  intersectionRoutePolyline: RoutePolyline | null;
+  isIntersectionEditMode: boolean;
+  intersectionRoadItems: any[];
   onHoveredIndexChange: (index: number | null) => void;
   onSelectedIndexChange: (index: number | null) => void;
   onEndpointClick: (ep: EndpointInfo) => void;
@@ -169,6 +175,10 @@ interface MapViewProps {
   onCancelExtend: () => void;
   onTrimStart: () => void;
   onTrimEnd: () => void;
+  onIntersectionAdd: IntersectionOverlayProps['onAdd'];
+  onIntersectionDelete: IntersectionOverlayProps['onDelete'];
+  onIntersectionRename: IntersectionOverlayProps['onRename'];
+  onIntersectionMove: IntersectionOverlayProps['onMove'];
   onCenterChange: (center: [number, number]) => void;
   onZoomChange: (zoom: number) => void;
 }
@@ -193,6 +203,14 @@ const MapView: React.FC<MapViewProps> = ({
   onCancelExtend,
   onTrimStart,
   onTrimEnd,
+  intersections,
+  intersectionRoutePolyline,
+  isIntersectionEditMode,
+  intersectionRoadItems,
+  onIntersectionAdd,
+  onIntersectionDelete,
+  onIntersectionRename,
+  onIntersectionMove,
   onCenterChange,
   onZoomChange,
 }) => {
@@ -285,6 +303,16 @@ const MapView: React.FC<MapViewProps> = ({
           trimMode={trimMode}
           onTrimStart={onTrimStart}
           onTrimEnd={onTrimEnd}
+        />
+        <IntersectionOverlay
+          intersections={intersections}
+          routePolyline={intersectionRoutePolyline}
+          isEditMode={isIntersectionEditMode}
+          roadItems={intersectionRoadItems}
+          onAdd={onIntersectionAdd}
+          onDelete={onIntersectionDelete}
+          onRename={onIntersectionRename}
+          onMove={onIntersectionMove}
         />
       </MapContainer>
     </div>

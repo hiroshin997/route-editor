@@ -7,7 +7,8 @@ import RoutePanel from './components/RoutePanel';
 import NewRoutePanel from './components/NewRoutePanel';
 import NamesEditModal from './components/NamesEditModal';
 import TrimRoutePanel from './components/TrimRoutePanel';
-import { BBox, RouteDoc, RoutePolyline, EndpointInfo, RoadArrow, PendingRoadItem, ExtendModeState, TrimModeState } from './types/route';
+import IntersectionPanel from './components/IntersectionPanel';
+import { BBox, RouteDoc, RoutePolyline, EndpointInfo, RoadArrow, PendingRoadItem, ExtendModeState, TrimModeState, Intersection, IntersectionModeState, DisplayIntersectionState } from './types/route';
 import { computeBboxFromGeoJSON, computeRoutePolylines } from './utils/routeUtils';
 import './App.css';
 
@@ -48,25 +49,29 @@ function App() {
   const [routePolylines, setRoutePolylines] = useState<RoutePolyline[]>([]);
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
-  const [panelMode, setPanelMode] = useState<'routes' | 'newRoute' | 'trim'>('routes');
+  const [panelMode, setPanelMode] = useState<'routes' | 'newRoute' | 'trim' | 'intersection'>('routes');
   const [previewRoutes, setPreviewRoutes] = useState<RoutePolyline[]>([]);
   const [cityBbox, setCityBbox] = useState<BBox | null>(saved?.cityBbox ?? null);
   const [editingRelationId, setEditingRelationId] = useState<number | null>(null);
   const [extendMode, setExtendMode] = useState<ExtendModeState | null>(null);
   const [trimMode, setTrimMode] = useState<TrimModeState | null>(null);
   const [isTrimSaving, setIsTrimSaving] = useState(false);
+  const [displayIntersections, setDisplayIntersections] = useState<DisplayIntersectionState | null>(null);
+  const [intersectionMode, setIntersectionMode] = useState<IntersectionModeState | null>(null);
+  const [isIntersectionSaving, setIsIntersectionSaving] = useState(false);
 
   // Refs for values needed inside callbacks without causing stale closures
   const latestRef  = useRef({ selections, zoom, mapCenter });
   const cityBboxRef = useRef<BBox | null>(saved?.cityBbox ?? null);
   latestRef.current = { selections, zoom, mapCenter };
 
-  // Close newRoute / trim panel when zoom drops below 14
+  // Close newRoute / trim / intersection panel when zoom drops below 14
   useEffect(() => {
-    if (zoom < 14 && (panelMode === 'newRoute' || panelMode === 'trim')) {
+    if (zoom < 14 && (panelMode === 'newRoute' || panelMode === 'trim' || panelMode === 'intersection')) {
       setPanelMode('routes');
       setPreviewRoutes([]);
       setTrimMode(null);
+      setIntersectionMode(null);
     }
   }, [zoom, panelMode]);
 
@@ -217,6 +222,8 @@ function App() {
       setPanelMode('routes');
       setPreviewRoutes([]);
       setTrimMode(null);
+      setIntersectionMode(null);
+      setDisplayIntersections(null);
       writeCookieState({
         selections: newSelections,
         zoom: latestRef.current.zoom,
@@ -233,6 +240,8 @@ function App() {
         setPanelMode('routes');
         setPreviewRoutes([]);
         setTrimMode(null);
+        setIntersectionMode(null);
+        setDisplayIntersections(null);
         await fetchRoutes(bbox);
         writeCookieState({
           selections: newSelections,
@@ -389,6 +398,153 @@ function App() {
     }
   };
 
+  // ── Intersection display: fetch when a route is selected ─────────────────────
+
+  useEffect(() => {
+    console.log('[intersections displayEffect] selectedIndex=', selectedIndex, 'intersectionMode=', !!intersectionMode);
+    if (selectedIndex === null) { setDisplayIntersections(null); return; }
+    if (intersectionMode) return;
+    const rp = routePolylines.find((p) => p.index === selectedIndex);
+    console.log('[intersections displayEffect] rp=', rp ? { relation_id: rp.relation_id, path_idx: rp.path_idx } : null);
+    if (!rp?.relation_id) { setDisplayIntersections(null); return; }
+    const { relation_id, path_idx = 0 } = rp;
+    (async () => {
+      try {
+        console.log(`[intersections displayEffect] fetching /api/routes/${relation_id}/intersections`);
+        const res = await fetch(`/api/routes/${relation_id}/intersections`);
+        const data = await res.json();
+        console.log('[intersections displayEffect] data=', data);
+        const rawKey = (data.routes_keys ?? [])[path_idx];
+        const groups_key: string | null = rawKey != null ? String(rawKey) : null;
+        const intersections: Intersection[] = groups_key != null
+          ? (data.intersection_groups?.[groups_key] ?? []) : [];
+        console.log('[intersections displayEffect] groups_key=', groups_key, 'count=', intersections.length);
+        setDisplayIntersections({ relation_id, path_idx, groups_key, intersections });
+      } catch (e) {
+        console.error('[intersections displayEffect] error:', e);
+        setDisplayIntersections(null);
+      }
+    })();
+  }, [selectedIndex, routePolylines, intersectionMode]);
+
+  // ── Intersection edit mode handlers ──────────────────────────────────────────
+
+  const handleOpenIntersectionMode = async (relation_id: number, path_idx: number): Promise<void> => {
+    const rp = routePolylines.find((p) => p.relation_id === relation_id && p.path_idx === path_idx);
+    if (rp) setSelectedIndex(rp.index);
+
+    // Open panel immediately with empty state – data fills in asynchronously
+    setIntersectionMode({
+      relation_id, path_idx,
+      groups_key: null,
+      originalIntersections: [],
+      currentIntersections: [],
+      roadItems: [],
+      originalGroups: {},
+      allRoutesKeys: [],
+      nextId: 999000000001,
+    });
+    setPanelMode('intersection');
+
+    try {
+      const [intRes, roadsRes] = await Promise.all([
+        fetch(`/api/routes/${relation_id}/intersections`),
+        fetch(`/api/routes/${relation_id}/roads?path_idx=${path_idx}`),
+      ]);
+      const intData = await intRes.json();
+      const roadItems: any[] = await roadsRes.json();
+      console.log('[handleOpenIntersectionMode] intData=', intData, 'roadItems.length=', roadItems.length);
+      const allRoutesKeys: (string | null)[] = intData.routes_keys ?? [];
+      const rawKey = allRoutesKeys[path_idx];
+      const groups_key: string | null = rawKey != null ? String(rawKey) : null;
+      const originalGroups: Record<string, Intersection[]> = intData.intersection_groups ?? {};
+      const originalIntersections: Intersection[] = groups_key != null
+        ? (originalGroups[groups_key] ?? []) : [];
+      console.log('[handleOpenIntersectionMode] groups_key=', groups_key, 'intersections=', originalIntersections.length);
+      const allIds = Object.values(originalGroups).flat().map((i: any) => i.intersection_id);
+      const nextId = Math.max(999000000000, ...allIds) + 1;
+      setIntersectionMode({
+        relation_id, path_idx, groups_key, originalIntersections,
+        currentIntersections: [...originalIntersections], roadItems, originalGroups, allRoutesKeys, nextId,
+      });
+    } catch (e) {
+      console.error('[App] handleOpenIntersectionMode error:', e);
+    }
+  };
+
+  const handleCancelIntersectionMode = (): void => {
+    const isDirty = intersectionMode &&
+      JSON.stringify(intersectionMode.currentIntersections) !==
+      JSON.stringify(intersectionMode.originalIntersections);
+    if (isDirty && !window.confirm('変更した内容は破棄されます。よろしいですか？')) return;
+    setIntersectionMode(null);
+    setPanelMode('routes');
+  };
+
+  const handleSaveIntersections = async (): Promise<void> => {
+    if (!intersectionMode) return;
+    setIsIntersectionSaving(true);
+    try {
+      const { relation_id, path_idx, groups_key, currentIntersections, originalGroups } = intersectionMode;
+      const routes_key_updates: { path_idx: number; key: string }[] = [];
+      let effectiveKey = groups_key;
+      if (!effectiveKey) {
+        effectiveKey = String(Object.keys(originalGroups).length);
+        routes_key_updates.push({ path_idx, key: effectiveKey });
+      }
+      const newGroups = { ...originalGroups, [effectiveKey]: currentIntersections };
+      const res = await fetch(`/api/routes/${relation_id}/intersections`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ intersection_groups: newGroups, routes_key_updates }),
+      });
+      if (res.ok) {
+        if (cityBboxRef.current) await fetchRoutes(cityBboxRef.current);
+        setIntersectionMode(null);
+        setPanelMode('routes');
+      }
+    } finally { setIsIntersectionSaving(false); }
+  };
+
+  const handleIntersectionAdd = (
+    snap: { road_id: number; coord_index: number; lat: number; lon: number },
+    name: string,
+  ): void => {
+    console.log('[handleIntersectionAdd] snap=', snap, 'name=', name);
+    setIntersectionMode((prev) => {
+      if (!prev) { console.log('[handleIntersectionAdd] intersectionMode is null!'); return prev; }
+      const newItem: Intersection = { intersection_id: prev.nextId, name, ...snap };
+      console.log('[handleIntersectionAdd] adding', newItem, 'total will be', prev.currentIntersections.length + 1);
+      return { ...prev, currentIntersections: [...prev.currentIntersections, newItem], nextId: prev.nextId + 1 };
+    });
+  };
+
+  const handleIntersectionDelete = (id: number): void => {
+    setIntersectionMode((prev) => {
+      if (!prev) return prev;
+      return { ...prev, currentIntersections: prev.currentIntersections.filter((i) => i.intersection_id !== id) };
+    });
+  };
+
+  const handleIntersectionRename = (id: number, name: string): void => {
+    setIntersectionMode((prev) => {
+      if (!prev) return prev;
+      return { ...prev, currentIntersections: prev.currentIntersections.map((i) =>
+        i.intersection_id === id ? { ...i, name } : i) };
+    });
+  };
+
+  const handleIntersectionMove = (
+    id: number,
+    snap: { road_id: number; coord_index: number; lat: number; lon: number },
+  ): void => {
+    setIntersectionMode((prev) => {
+      if (!prev) return prev;
+      return { ...prev, currentIntersections: prev.currentIntersections.map((i) =>
+        i.intersection_id === id ? { ...i, ...snap } : i) };
+    });
+  };
+
   // ── Route trim handlers ────────────────────────────────────────────────────────
 
   const handleOpenTrimMode = async (relation_id: number, path_idx: number): Promise<void> => {
@@ -483,6 +639,16 @@ function App() {
           selectedIndex={selectedIndex}
           extendMode={extendMode}
           trimMode={trimMode}
+          intersections={intersectionMode?.currentIntersections ?? displayIntersections?.intersections ?? []}
+          intersectionRoutePolyline={(() => {
+            const rid = intersectionMode?.relation_id ?? displayIntersections?.relation_id;
+            const pidx = intersectionMode?.path_idx ?? displayIntersections?.path_idx;
+            return rid !== undefined
+              ? routePolylines.find((rp) => rp.relation_id === rid && rp.path_idx === pidx) ?? null
+              : null;
+          })()}
+          isIntersectionEditMode={!!intersectionMode}
+          intersectionRoadItems={intersectionMode?.roadItems ?? []}
           onHoveredIndexChange={setHoveredIndex}
           onSelectedIndexChange={(index) =>
             setSelectedIndex((prev) => (prev === index ? null : index))
@@ -494,6 +660,10 @@ function App() {
           onCancelExtend={handleCancelExtend}
           onTrimStart={handleTrimStart}
           onTrimEnd={handleTrimEnd}
+          onIntersectionAdd={handleIntersectionAdd}
+          onIntersectionDelete={handleIntersectionDelete}
+          onIntersectionRename={handleIntersectionRename}
+          onIntersectionMove={handleIntersectionMove}
           onCenterChange={handleCenterChange}
           onZoomChange={handleZoomChange}
         />
@@ -513,6 +683,8 @@ function App() {
             extendingRelationId={extendMode?.relation_id}
             onTrimRoute={handleOpenTrimMode}
             trimmingRelationId={trimMode?.relation_id}
+            onIntersectionRoute={handleOpenIntersectionMode}
+            intersectionRelationId={intersectionMode?.relation_id}
           />
         ) : panelMode === 'trim' ? (
           <TrimRoutePanel
@@ -521,6 +693,16 @@ function App() {
             onSave={handleSaveTrim}
             onCancel={handleCancelTrim}
             onClose={handleCancelTrim}
+          />
+        ) : panelMode === 'intersection' ? (
+          <IntersectionPanel
+            isDirty={!!(intersectionMode &&
+              JSON.stringify(intersectionMode.currentIntersections) !==
+              JSON.stringify(intersectionMode.originalIntersections))}
+            isSaving={isIntersectionSaving}
+            onSave={handleSaveIntersections}
+            onCancel={handleCancelIntersectionMode}
+            onClose={handleCancelIntersectionMode}
           />
         ) : (
           <NewRoutePanel

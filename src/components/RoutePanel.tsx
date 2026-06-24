@@ -2,6 +2,7 @@ import React from 'react';
 import EditIcon from '@mui/icons-material/Edit';
 import OpenWithIcon from '@mui/icons-material/OpenWith';
 import ContentCutIcon from '@mui/icons-material/ContentCut';
+import TrafficIcon from '@mui/icons-material/Traffic';
 import { RoutePolyline } from '../types/route';
 
 interface RoutePanelProps {
@@ -17,6 +18,8 @@ interface RoutePanelProps {
   extendingRelationId?: number;
   onTrimRoute: (relation_id: number, path_idx: number) => void;
   trimmingRelationId?: number;
+  onIntersectionRoute: (relation_id: number, path_idx: number) => void;
+  intersectionRelationId?: number;
 }
 
 const RoutePanel: React.FC<RoutePanelProps> = ({
@@ -32,6 +35,8 @@ const RoutePanel: React.FC<RoutePanelProps> = ({
   extendingRelationId,
   onTrimRoute,
   trimmingRelationId,
+  onIntersectionRoute,
+  intersectionRelationId,
 }) => {
   const newRouteEnabled = citySelected && zoom >= 14;
   return (
@@ -82,6 +87,13 @@ const RoutePanel: React.FC<RoutePanelProps> = ({
                     onClick={(e) => { e.stopPropagation(); onTrimRoute(rp.relation_id!, rp.path_idx ?? 0); }}
                   >
                     <ContentCutIcon fontSize="small" />
+                  </button>
+                  <button
+                    className={`route-panel-edit-btn route-panel-intersection-btn${intersectionRelationId === rp.relation_id ? ' route-panel-intersection-btn--active' : ''}`}
+                    title="交差点編集"
+                    onClick={(e) => { e.stopPropagation(); onIntersectionRoute(rp.relation_id!, rp.path_idx ?? 0); }}
+                  >
+                    <TrafficIcon fontSize="small" />
                   </button>
                 </>
               )}
