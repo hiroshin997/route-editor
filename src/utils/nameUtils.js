@@ -85,7 +85,7 @@ function generateNameVariations(name) {
  * @param {string} name 
  * @returns {string[]}
  */
-export function getNameVariations(name) {
+function getNameVariations(name) {
     // NFKC normalization matches Python's unicodedata.normalize
     const originalName = name.normalize("NFKC");
     let currentName = originalName;
@@ -116,3 +116,5 @@ export function getNameVariations(name) {
 // const exampleText = "鳩ヶ谷緑町10丁目";
 // console.log(getNameVariations(exampleText));
 // Output: [ '鳩ヶ谷緑町10丁目', '鳩ヶ谷緑町十丁目', '鳩ケ谷緑町十丁目', '鳩が谷緑町十丁目', '鳩ガ谷緑町十丁目' ]
+
+module.exports = { getNameVariations };

@@ -63,8 +63,8 @@ function createIntersectionIcon(names: string[]): L.DivIcon {
 // ── Context menu and dialog types ─────────────────────────────────────────────
 
 type CtxMenu =
-  | { type: 'polyline'; x: number; y: number; snapResult: { road_id: number; coord_index: number; lat: number; lon: number } }
-  | { type: 'marker';   x: number; y: number; intersection: Intersection }
+  | { type: 'polyline'; x: number; y: number; lat: number; lon: number; snapResult: { road_id: number; coord_index: number; lat: number; lon: number } }
+  | { type: 'marker';   x: number; y: number; lat: number; lon: number; intersection: Intersection }
   | null;
 
 type Dialog =
@@ -127,7 +127,7 @@ const IntersectionOverlay: React.FC<IntersectionOverlayProps> = ({
     e.originalEvent.preventDefault();
     L.DomEvent.stopPropagation(e);
     const pt = map.latLngToContainerPoint(e.latlng);
-    setCtxMenu({ type: 'marker', x: pt.x, y: pt.y, intersection });
+    setCtxMenu({ type: 'marker', x: pt.x, y: pt.y, lat: e.latlng.lat, lon: e.latlng.lng, intersection });
   }, [isEditMode, map]);
 
   const handleDragEnd = useCallback((e: any, id: number) => {
@@ -149,7 +149,7 @@ const IntersectionOverlay: React.FC<IntersectionOverlayProps> = ({
     const snap = snapToPolyline(e.latlng.lat, e.latlng.lng, roadItems);
     if (snap) {
       const pt = map.latLngToContainerPoint(e.latlng);
-      setCtxMenu({ type: 'polyline', x: pt.x, y: pt.y, snapResult: snap });
+      setCtxMenu({ type: 'polyline', x: pt.x, y: pt.y, lat: e.latlng.lat, lon: e.latlng.lng, snapResult: snap });
     }
   }, [isEditMode, roadItems, map]);
 
@@ -257,6 +257,18 @@ const IntersectionOverlay: React.FC<IntersectionOverlayProps> = ({
               <div className="ctx-menu-item" onClick={handleCtxDelete}>交差点の削除</div>
             </>
           )}
+          <hr className="ctx-menu-divider" />
+          <div
+            className="ctx-menu-item"
+            onClick={() => {
+              const zoom = map.getZoom();
+              const url = `http://maps.google.com/maps?z=${zoom}&t=m&q=loc:${ctxMenu.lat}+${ctxMenu.lon}`;
+              window.open(url, '_blank');
+              setCtxMenu(null);
+            }}
+          >
+            Google Maps
+          </div>
         </div>,
         mapContainer,
       )}

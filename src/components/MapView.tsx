@@ -7,6 +7,7 @@ import ExtendRouteOverlay from './ExtendRouteOverlay';
 import TrimRouteOverlay from './TrimRouteOverlay';
 import IntersectionOverlay, { IntersectionOverlayProps } from './IntersectionOverlay';
 import FromScratchOverlay from './FromScratchOverlay';
+import MapContextMenu from './MapContextMenu';
 
 // Fix default marker icon paths broken by webpack
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -327,6 +328,7 @@ const MapView: React.FC<MapViewProps> = ({
             onRoadSelected={onScratchRoadSelected}
           />
         )}
+        <MapContextMenu />
       </MapContainer>
     </div>
   );

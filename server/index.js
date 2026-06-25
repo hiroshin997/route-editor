@@ -4,7 +4,8 @@ const express = require('express');
 const { MongoClient } = require('mongodb');
 const cors = require('cors');
 
-const { buildRoutePreview, saveRoute, buildRouteFromRoadIds, nodeToInt, isForwardOnlyRoad, bearingDegreesInt, ROAD_PROJECTION } = require('./routeBuilder');
+const { buildRoutePreview, saveRoute, buildRouteFromRoadIds, applyIntersectionGroupKeys, nodeToInt, isForwardOnlyRoad, bearingDegreesInt, hubenyJapanM, ROAD_PROJECTION } = require('./routeBuilder');
+const { getNameVariations } = require('../src/utils/nameUtils');
 
 const app = express();
 const PORT = 5000;
@@ -128,6 +129,128 @@ app.get('/api/locations/polygon', async (req, res) => {
 });
 
 // ── Routes ────────────────────────────────────────────────────────────────────
+
+// ── Intersection helpers ──────────────────────────────────────────────────────
+
+/**
+ * buildIntersectionGroup
+ * Given intersection documents from jpintersections, returns the list of
+ * intersection items to add to a route's intersection_groups entry.
+ *
+ * @param {object[]} intersectionDocs - docs from jpintersections collection
+ * @param {number[]} roadIds          - road IDs being added (new/extended roads)
+ * @param {string[]} usedNames        - NFKC-normalised names already in the route
+ */
+function buildIntersectionGroup(intersectionDocs, roadIds, usedNames = []) {
+  if (!Array.isArray(roadIds) || roadIds.length === 0) return [];
+
+  const roadIdsSet   = new Set(roadIds.map(Number));
+  const usedNamesSet = new Set(usedNames);
+
+  const seenRoads = {}; // name → refinedRoad[]
+  const seenId    = {}; // name → intersection id
+
+  for (const doc of intersectionDocs) {
+    for (const refinedRoad of (doc?.refined_roads || [])) {
+      if (!refinedRoad) continue;
+      const name = String(doc?.name || '').normalize('NFKC').trim();
+      if (!name || usedNamesSet.has(name)) continue;
+      if (!seenRoads[name]) {
+        seenRoads[name] = [];
+        seenId[name]    = doc?.id;
+      }
+      if (roadIdsSet.has(Number(refinedRoad.road_id))) {
+        seenRoads[name].push(refinedRoad);
+      }
+    }
+  }
+
+  const group = [];
+  for (const [name, candidates] of Object.entries(seenRoads)) {
+    if (!candidates.length) continue;
+    let pick = null;
+    if (candidates.length === 1) {
+      pick = candidates[0];
+    } else {
+      const lats = candidates.map((r) => r.lat);
+      const lons = candidates.map((r) => r.lon);
+      const minLat = Math.min(...lats), maxLat = Math.max(...lats);
+      const minLon = Math.min(...lons), maxLon = Math.max(...lons);
+      const latDistM = hubenyJapanM(minLat, minLon, maxLat, minLon);
+      const lonDistM = hubenyJapanM(minLat, minLon, minLat, maxLon);
+      const sorted = [...candidates].sort(
+        latDistM < lonDistM ? (a, b) => a.lon - b.lon : (a, b) => a.lat - b.lat
+      );
+      pick = sorted[Math.floor(sorted.length / 2)];
+    }
+    if (pick) {
+      group.push({
+        intersection_id: seenId[name],
+        names:           getNameVariations(name),
+        road_id:         Number(pick.road_id),
+        coord_index:     pick.coord_index,
+        lat:             pick.lat,
+        lon:             pick.lon,
+      });
+    }
+  }
+  return group;
+}
+
+/**
+ * buildUpdatedIntersectionGroups
+ * For the given routes array and the set of *newly added* road IDs, queries
+ * jpintersections and appends new intersection items to the relevant groups.
+ * Returns the updated groups object, or null if nothing changed.
+ *
+ * @param {object[]} routes        - route paths (after save/extend, keys already applied)
+ * @param {number[]} newRoadIds    - road IDs that were added in this operation
+ * @param {object}   existingGroups- current doc.intersection_groups (may be {})
+ */
+async function buildUpdatedIntersectionGroups(routes, newRoadIds, existingGroups) {
+  const newSet = new Set(newRoadIds.map(Number));
+
+  // Determine which road IDs belong to which group key
+  const keyToNewRoads = {}; // key → Set<number>
+  for (const path of (routes || [])) {
+    const key = path.intersection_group_key;
+    if (!key) continue;
+    for (const r of (path.roads || [])) {
+      const id = Number(r.road_id);
+      if (newSet.has(id)) {
+        if (!keyToNewRoads[key]) keyToNewRoads[key] = new Set();
+        keyToNewRoads[key].add(id);
+      }
+    }
+  }
+
+  if (Object.keys(keyToNewRoads).length === 0) return null;
+
+  // Collect all names already used across ALL groups (to avoid duplicates)
+  const allUsedNames = new Set(
+    Object.values(existingGroups || {}).flat()
+      .flatMap((i) => (Array.isArray(i.names) ? i.names : []))
+  );
+
+  const updated = { ...(existingGroups || {}) };
+  let changed = false;
+
+  for (const [key, roadIdsSet] of Object.entries(keyToNewRoads)) {
+    const roadIds = [...roadIdsSet];
+    const docs = await osmDb.collection('jpintersections')
+      .find({ 'refined_roads.road_id': { $in: roadIds } })
+      .toArray();
+
+    const newItems = buildIntersectionGroup(docs, roadIds, [...allUsedNames]);
+    if (newItems.length > 0) {
+      updated[key] = [...(updated[key] || []), ...newItems];
+      newItems.forEach((item) => (item.names || []).forEach((n) => allUsedNames.add(n)));
+      changed = true;
+    }
+  }
+
+  return changed ? updated : null;
+}
 
 function bboxToGeoJsonPolygon(bbox) {
   return {
@@ -396,7 +519,7 @@ app.put('/api/routes/:relation_id/trim', async (req, res) => {
     }
 
     const col = osmDb.collection(ROUTES_COLLECTION);
-    const doc = await col.findOne({ relation_id }, { projection: { routes: 1, _id: 0 } });
+    const doc = await col.findOne({ relation_id }, { projection: { routes: 1, intersection_groups: 1, _id: 0 } });
     if (!doc) return res.status(404).json({ error: 'Not found' });
 
     // Enforce -1 on new endpoint side-road IDs
@@ -414,7 +537,22 @@ app.put('/api/routes/:relation_id/trim', async (req, res) => {
     const jst = new Date(Date.now() + 9 * 3600 * 1000);
     const updated_at = `${jst.getUTCFullYear()}-${pad(jst.getUTCMonth()+1)}-${pad(jst.getUTCDate())}T${pad(jst.getUTCHours())}:${pad(jst.getUTCMinutes())}:${pad(jst.getUTCSeconds())}+09:00`;
 
-    await col.updateOne({ relation_id }, { $set: { routes, bbox, updated_at } });
+    // Remove intersections whose road_id is no longer in any path sharing the same key
+    const trimKey = doc.routes[path_idx]?.intersection_group_key;
+    const existingGroups = doc.intersection_groups || {};
+    const $set = { routes, bbox, updated_at };
+    if (trimKey && existingGroups[trimKey]) {
+      const validIds = new Set();
+      for (const path of routes) {
+        if (path.intersection_group_key === trimKey) {
+          for (const r of (path.roads || [])) validIds.add(Number(r.road_id));
+        }
+      }
+      const filtered = (existingGroups[trimKey] || []).filter((item) => validIds.has(Number(item.road_id)));
+      $set.intersection_groups = { ...existingGroups, [trimKey]: filtered };
+    }
+
+    await col.updateOne({ relation_id }, { $set });
     res.json({ ok: true });
   } catch (err) {
     console.error('/api/routes/:id/trim error:', err);
@@ -581,7 +719,7 @@ app.post('/api/routes/:relation_id/extend', async (req, res) => {
     }
 
     const col = osmDb.collection(ROUTES_COLLECTION);
-    const doc = await col.findOne({ relation_id }, { projection: { routes: 1, _id: 0 } });
+    const doc = await col.findOne({ relation_id }, { projection: { routes: 1, intersection_groups: 1, _id: 0 } });
     if (!doc) return res.status(404).json({ error: 'Not found' });
 
     // Collect existing road IDs from current doc.routes
@@ -595,23 +733,29 @@ app.post('/api/routes/:relation_id/extend', async (req, res) => {
 
     const allIds = [...existingIds, ...new_road_ids.map(Number)];
     const rebuilt = await buildRouteFromRoadIds(allIds, city_bbox || null, osmDb);
+    const routesWithKeys = applyIntersectionGroupKeys(rebuilt.routes);
 
     // ISO datetime in JST
     const pad = (n) => String(n).padStart(2, '0');
     const jst = new Date(Date.now() + 9 * 3600 * 1000);
     const updated_at = `${jst.getUTCFullYear()}-${pad(jst.getUTCMonth()+1)}-${pad(jst.getUTCDate())}T${pad(jst.getUTCHours())}:${pad(jst.getUTCMinutes())}:${pad(jst.getUTCSeconds())}+09:00`;
 
-    await col.updateOne(
-      { relation_id },
-      { $set: {
-        routes: rebuilt.routes,
-        bbox: rebuilt.bbox,
-        highway_stat: rebuilt.highway_stat,
-        roads: allIds.map((id) => ({ road_id: id, role: '' })),
-        updated_at,
-      }}
+    // Append intersections for the newly added roads
+    const existingGroups = doc.intersection_groups || {};
+    const updatedGroups = await buildUpdatedIntersectionGroups(
+      routesWithKeys, new_road_ids.map(Number), existingGroups
     );
 
+    const $setPayload = {
+      routes: routesWithKeys,
+      bbox: rebuilt.bbox,
+      highway_stat: rebuilt.highway_stat,
+      roads: allIds.map((id) => ({ road_id: id, role: '' })),
+      updated_at,
+    };
+    if (updatedGroups) $setPayload.intersection_groups = updatedGroups;
+
+    await col.updateOne({ relation_id }, { $set: $setPayload });
     res.json({ ok: true });
   } catch (err) {
     console.error('/api/routes/:id/extend error:', err);
@@ -770,6 +914,18 @@ app.post('/api/routes/save', async (req, res) => {
       return res.status(400).json({ error: 'routes, bbox, names required' });
     }
     const result = await saveRoute({ routes, bbox, highway_stat: highway_stat || {}, names }, osmDb);
+    // Add intersections for all roads in the saved route
+    const routesWithKeys = applyIntersectionGroupKeys(routes);
+    const allRoadIds = routesWithKeys.flatMap(
+      (p) => (p.roads || []).map((r) => Number(r.road_id))
+    );
+    const updatedGroups = await buildUpdatedIntersectionGroups(routesWithKeys, allRoadIds, {});
+    if (updatedGroups) {
+      await osmDb.collection(ROUTES_COLLECTION).updateOne(
+        { relation_id: result.relation_id },
+        { $set: { intersection_groups: updatedGroups } }
+      );
+    }
     res.json(result);
   } catch (err) {
     console.error('/api/routes/save error:', err);
@@ -862,6 +1018,15 @@ app.post('/api/routes/from-scratch', async (req, res) => {
       return res.status(404).json({ error: 'No routes could be built for this road' });
     }
     const result = await saveRoute({ ...routeData, names }, osmDb);
+    // Add intersections for the selected road
+    const routesWithKeys = applyIntersectionGroupKeys(routeData.routes);
+    const updatedGroups = await buildUpdatedIntersectionGroups(routesWithKeys, [Number(road_id)], {});
+    if (updatedGroups) {
+      await osmDb.collection(ROUTES_COLLECTION).updateOne(
+        { relation_id: result.relation_id },
+        { $set: { intersection_groups: updatedGroups } }
+      );
+    }
     res.json(result);
   } catch (err) {
     console.error('/api/routes/from-scratch error:', err);

@@ -536,6 +536,9 @@ body,
   padding: 7px 14px; font-size: 13px; cursor: pointer;
 }
 .ctx-menu-item:hover { background: #f0f0f0; }
+.ctx-menu-divider {
+  border: none; border-top: 1px solid #e0e0e0; margin: 3px 0;
+}
 
 /* ── Intersection dialog ─────────────────────────────────────────────────── */
 .intersection-dialog-backdrop {

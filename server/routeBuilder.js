@@ -561,9 +561,11 @@ module.exports = {
   buildRoutePreview,
   saveRoute,
   buildRouteFromRoadIds,
+  applyIntersectionGroupKeys,
   // Exported utilities for use in index.js
   nodeToInt,
   isForwardOnlyRoad,
   bearingDegreesInt,
+  hubenyJapanM,
   ROAD_PROJECTION,
 };
