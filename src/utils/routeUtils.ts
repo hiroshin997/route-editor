@@ -78,7 +78,7 @@ export function computeRoutePolylines(docs: RouteDoc[], _bbox: BBox | null): Rou
       if (coords.length === 0) continue;
       result.push({
         index,
-        name: doc.name,
+        name: doc.names?.[0] ?? doc.name ?? '',
         coords,
         relation_id: doc.relation_id,
         path_idx: i,

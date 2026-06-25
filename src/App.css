@@ -241,7 +241,7 @@ body,
 
 /* ── NewRoutePanel ───────────────────────────────────────────────────────── */
 .new-route-panel {
-  width: 220px;
+  width: 330px;
   border-left: 1px solid #d0d0d0;
   background: #fff;
   display: flex;
@@ -398,6 +398,28 @@ body,
   color: #999;
 }
 
+.new-route-scratch-section {
+  border-top: 1px solid #e0e0e0;
+  padding: 6px 8px;
+}
+
+.new-route-from-scratch-btn {
+  width: 100%;
+  padding: 5px 0;
+  background: #dc2626;
+  color: #fff;
+  border: none;
+  border-radius: 3px;
+  font-size: 12px;
+  font-weight: bold;
+  cursor: pointer;
+  letter-spacing: 0.03em;
+}
+
+.new-route-from-scratch-btn:hover {
+  background: #b91c1c;
+}
+
 .new-route-spinner {
   font-size: 12px;
   color: #666;
@@ -416,6 +438,16 @@ body,
 
 .route-preview-blink {
   animation: routePreviewBlink 0.8s ease-in-out infinite;
+}
+
+/* ── From-scratch road blink animation ──────────────────────────────────── */
+@keyframes fromScratchBlink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.2; }
+}
+
+.from-scratch-road {
+  animation: fromScratchBlink 0.9s ease-in-out infinite;
 }
 
 /* ── Route panel trim button ─────────────────────────────────────────────── */

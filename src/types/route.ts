@@ -34,6 +34,8 @@ export interface RoutePath {
 export interface RouteDoc {
   relation_id: number;
   name: string;
+  /** Route names: primary name first, then NFKC/variation equivalents */
+  names: string[];
   /** routes[i] = one path object containing an ordered array of RoadObjects */
   routes: RoutePath[];
 }
@@ -42,7 +44,8 @@ export interface RouteDoc {
 
 export interface Intersection {
   intersection_id: number;
-  name: string;
+  /** Intersection names: primary first, then NFKC/variation equivalents */
+  names: string[];
   road_id: number;
   coord_index: number;
   lat: number;
@@ -88,6 +91,24 @@ export interface RoutePolyline {
   path_idx?: number;
   /** Number of road_items in this path (for disabling trim button) */
   road_count?: number;
+}
+
+// ── From-scratch route creation ───────────────────────────────────────────────
+
+/** Road returned by /api/roads/nearest, used in from-scratch mode. */
+export interface FromScratchRoad {
+  road_id: number;
+  name: string;
+  oneway: boolean;
+  /** [[lon, lat], ...] from MongoDB centerline */
+  coords: [number, number][];
+}
+
+/** Overall from-scratch mode state managed in App.tsx. */
+export interface FromScratchState {
+  query: string;
+  /** null = no road selected yet; non-null = road clicked */
+  road: FromScratchRoad | null;
 }
 
 // ── Route extension types ─────────────────────────────────────────────────────

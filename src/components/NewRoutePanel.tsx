@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { BBox, RouteDoc, RoutePolyline } from '../types/route';
+import { BBox, FromScratchState, RouteDoc, RoutePolyline } from '../types/route';
 import { computeRoutePolylines } from '../utils/routeUtils';
 
 interface SearchResult {
@@ -11,29 +11,41 @@ interface PreviewData {
   routes: any[][];
   bbox: BBox;
   highway_stat: Record<string, unknown>;
-  names: { value: string; is_global: boolean; locations: string[][] }[];
+  names: string[];
 }
 
 interface NewRoutePanelProps {
   cityBbox: BBox | null;
   /** Current displayed route polylines (for finding 3.2 match by relation_id) */
   routePolylines: RoutePolyline[];
+  /** from-scratch state (null = inactive, non-null = active) */
+  fromScratch: FromScratchState | null;
   onClose: () => void;
   /** Called whenever preview polylines change (pass [] to clear) */
   onPreviewRoutes: (routes: RoutePolyline[]) => void;
   /** Called when user selects an existing route (3.4): highlight it and close */
   onExistingRouteSelect: (index: number) => void;
-  /** Called after a route is saved; triggers route list reload */
+  /** Called after a road-name-based route is saved; triggers route list reload */
   onSaved: () => void;
+  /** Called when [from scratch] button is clicked */
+  onEnterScratch: (query: string) => void;
+  /** Called when [cancel] is clicked in scratch mode */
+  onExitScratch: () => void;
+  /** Called when [save] is clicked in scratch mode; App.tsx handles the actual save */
+  onSaveScratch: () => Promise<void>;
 }
 
 const NewRoutePanel: React.FC<NewRoutePanelProps> = ({
   cityBbox,
   routePolylines,
+  fromScratch,
   onClose,
   onPreviewRoutes,
   onExistingRouteSelect,
   onSaved,
+  onEnterScratch,
+  onExitScratch,
+  onSaveScratch,
 }) => {
   const [query, setQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
@@ -42,9 +54,11 @@ const NewRoutePanel: React.FC<NewRoutePanelProps> = ({
   const [previewData, setPreviewData] = useState<PreviewData | null>(null);
   const [isBuildingRoute, setIsBuildingRoute] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isScratchSaving, setIsScratchSaving] = useState(false);
 
   const handleClose = () => {
     onPreviewRoutes([]);
+    if (fromScratch) onExitScratch();
     onClose();
   };
 
@@ -55,6 +69,7 @@ const NewRoutePanel: React.FC<NewRoutePanelProps> = ({
     setSelectedRoadName(null);
     setPreviewData(null);
     onPreviewRoutes([]);
+    if (fromScratch) onExitScratch();
     try {
       const bboxParams =
         `minLon=${cityBbox.minLon}&minLat=${cityBbox.minLat}` +
@@ -97,6 +112,7 @@ const NewRoutePanel: React.FC<NewRoutePanelProps> = ({
         const fakeDoc: RouteDoc = {
           relation_id: 0,
           name: roadName,
+          names: roadName ? [roadName] : [],
           routes: data.routes as any,
         };
         onPreviewRoutes(computeRoutePolylines([fakeDoc], data.bbox));
@@ -130,6 +146,15 @@ const NewRoutePanel: React.FC<NewRoutePanelProps> = ({
       console.error('[NewRoutePanel] save error:', e);
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleScratchSave = async () => {
+    setIsScratchSaving(true);
+    try {
+      await onSaveScratch();
+    } finally {
+      setIsScratchSaving(false);
     }
   };
 
@@ -225,6 +250,38 @@ const NewRoutePanel: React.FC<NewRoutePanelProps> = ({
 
           {searchResult.roadNames.length === 0 && searchResult.existingRoutes.length === 0 && (
             <div className="new-route-no-results">結果なし</div>
+          )}
+
+          {/* from scratch section */}
+          {fromScratch ? (
+            /* scratch mode: show styled query text + save/cancel */
+            <div className="new-route-scratch-section">
+              <div className="new-route-result-item new-route-result-item--selected">
+                {fromScratch.query}
+              </div>
+              <div className="new-route-actions">
+                <button
+                  className="new-route-save-btn"
+                  disabled={!fromScratch.road || isScratchSaving}
+                  onClick={handleScratchSave}
+                >
+                  {isScratchSaving ? '保存中…' : 'save'}
+                </button>
+                <button className="new-route-cancel-btn" onClick={onExitScratch}>
+                  cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            /* not in scratch mode: show [from scratch] button */
+            <div className="new-route-scratch-section">
+              <button
+                className="new-route-from-scratch-btn"
+                onClick={() => onEnterScratch(query.trim())}
+              >
+                from scratch
+              </button>
+            </div>
           )}
         </div>
       )}

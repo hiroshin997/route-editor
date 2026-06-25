@@ -5,8 +5,6 @@ import CloseIcon from '@mui/icons-material/Close';
 
 interface NameEntry {
   value: string;
-  is_global: boolean;
-  locations: string[][];
   /** UI-only: marked for deletion */
   deleted: boolean;
   /** UI-only: newly added in this session */
@@ -25,42 +23,31 @@ const NamesEditModal: React.FC<NamesEditModalProps> = ({
   onSaved,
 }) => {
   const [entries, setEntries] = useState<NameEntry[]>([]);
-  const [originalNames, setOriginalNames] = useState<
-    { value: string; is_global: boolean; locations: string[][] }[]
-  >([]);
+  const [originalNames, setOriginalNames] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     fetch(`/api/routes/${relation_id}/names`)
       .then((r) => r.json())
-      .then((names: { value: string; is_global?: boolean; locations?: string[][] }[]) => {
-        const loaded: NameEntry[] = names.map((n) => ({
-          value: n.value,
-          is_global: n.is_global ?? true,
-          locations: n.locations ?? [],
-          deleted: false,
-          isNew: false,
-        }));
-        setEntries(loaded);
-        setOriginalNames(
-          names.map((n) => ({
-            value: n.value,
-            is_global: n.is_global ?? true,
-            locations: n.locations ?? [],
-          }))
+      .then((names: unknown[]) => {
+        // Support both string[] (new schema) and {value}[] (old schema)
+        const strs: string[] = names.map((n) =>
+          typeof n === 'string' ? n : (n as any).value ?? ''
         );
+        setEntries(strs.map((v) => ({ value: v, deleted: false, isNew: false })));
+        setOriginalNames(strs);
       })
       .finally(() => setIsLoading(false));
   }, [relation_id]);
 
-  // Names that will actually be saved (non-deleted entries)
-  const finalNames = entries
+  // Names that will actually be saved (non-deleted, non-empty entries)
+  const finalNames: string[] = entries
     .filter((e) => !e.deleted)
-    .map(({ value, is_global, locations }) => ({ value, is_global, locations }));
+    .map((e) => e.value);
 
   const isDirty = JSON.stringify(finalNames) !== JSON.stringify(originalNames);
-  const hasEmptyEnabled = finalNames.some((e) => !e.value.trim());
+  const hasEmptyEnabled = finalNames.some((v) => !v.trim());
   const saveEnabled = isDirty && !hasEmptyEnabled && !isSaving;
 
   const update = (idx: number, patch: Partial<NameEntry>) =>
@@ -131,7 +118,7 @@ const NamesEditModal: React.FC<NamesEditModalProps> = ({
               onClick={() =>
                 setEntries((prev) => [
                   ...prev,
-                  { value: '', is_global: true, locations: [], deleted: false, isNew: true },
+                  { value: '', deleted: false, isNew: true },
                 ])
               }
             >

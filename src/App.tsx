@@ -8,8 +8,9 @@ import NewRoutePanel from './components/NewRoutePanel';
 import NamesEditModal from './components/NamesEditModal';
 import TrimRoutePanel from './components/TrimRoutePanel';
 import IntersectionPanel from './components/IntersectionPanel';
-import { BBox, RouteDoc, RoutePolyline, EndpointInfo, RoadArrow, PendingRoadItem, ExtendModeState, TrimModeState, Intersection, IntersectionModeState, DisplayIntersectionState } from './types/route';
+import { BBox, RouteDoc, RoutePolyline, EndpointInfo, RoadArrow, PendingRoadItem, ExtendModeState, TrimModeState, Intersection, IntersectionModeState, DisplayIntersectionState, FromScratchState } from './types/route';
 import { computeBboxFromGeoJSON, computeRoutePolylines } from './utils/routeUtils';
+import { getNameVariations } from './utils/nameUtils';
 import './App.css';
 
 const DEFAULT_CENTER: [number, number] = [36.2048, 138.2529];
@@ -59,6 +60,7 @@ function App() {
   const [displayIntersections, setDisplayIntersections] = useState<DisplayIntersectionState | null>(null);
   const [intersectionMode, setIntersectionMode] = useState<IntersectionModeState | null>(null);
   const [isIntersectionSaving, setIsIntersectionSaving] = useState(false);
+  const [fromScratch, setFromScratch] = useState<FromScratchState | null>(null);
 
   // Refs for values needed inside callbacks without causing stale closures
   const latestRef  = useRef({ selections, zoom, mapCenter });
@@ -458,8 +460,14 @@ function App() {
       const rawKey = allRoutesKeys[path_idx];
       const groups_key: string | null = rawKey != null ? String(rawKey) : null;
       const originalGroups: Record<string, Intersection[]> = intData.intersection_groups ?? {};
+      // Normalize legacy name: string → names: string[]
+      const normalizeIntersection = (raw: any): Intersection => ({
+        ...raw,
+        names: Array.isArray(raw.names) ? raw.names
+          : raw.name != null ? [raw.name] : [],
+      });
       const originalIntersections: Intersection[] = groups_key != null
-        ? (originalGroups[groups_key] ?? []) : [];
+        ? (originalGroups[groups_key] ?? []).map(normalizeIntersection) : [];
       console.log('[handleOpenIntersectionMode] groups_key=', groups_key, 'intersections=', originalIntersections.length);
       const allIds = Object.values(originalGroups).flat().map((i: any) => i.intersection_id);
       const nextId = Math.max(999000000000, ...allIds) + 1;
@@ -508,12 +516,12 @@ function App() {
 
   const handleIntersectionAdd = (
     snap: { road_id: number; coord_index: number; lat: number; lon: number },
-    name: string,
+    names: string[],
   ): void => {
-    console.log('[handleIntersectionAdd] snap=', snap, 'name=', name);
+    console.log('[handleIntersectionAdd] snap=', snap, 'names=', names);
     setIntersectionMode((prev) => {
       if (!prev) { console.log('[handleIntersectionAdd] intersectionMode is null!'); return prev; }
-      const newItem: Intersection = { intersection_id: prev.nextId, name, ...snap };
+      const newItem: Intersection = { intersection_id: prev.nextId, names, ...snap };
       console.log('[handleIntersectionAdd] adding', newItem, 'total will be', prev.currentIntersections.length + 1);
       return { ...prev, currentIntersections: [...prev.currentIntersections, newItem], nextId: prev.nextId + 1 };
     });
@@ -526,11 +534,11 @@ function App() {
     });
   };
 
-  const handleIntersectionRename = (id: number, name: string): void => {
+  const handleIntersectionRename = (id: number, names: string[]): void => {
     setIntersectionMode((prev) => {
       if (!prev) return prev;
       return { ...prev, currentIntersections: prev.currentIntersections.map((i) =>
-        i.intersection_id === id ? { ...i, name } : i) };
+        i.intersection_id === id ? { ...i, names } : i) };
     });
   };
 
@@ -542,6 +550,49 @@ function App() {
       if (!prev) return prev;
       return { ...prev, currentIntersections: prev.currentIntersections.map((i) =>
         i.intersection_id === id ? { ...i, ...snap } : i) };
+    });
+  };
+
+  // ── From-scratch handlers ────────────────────────────────────────────────────
+
+  const handleEnterScratch = (query: string): void => {
+    setFromScratch({ query, road: null });
+  };
+
+  const handleExitScratch = (): void => {
+    setFromScratch(null);
+  };
+
+  const handleScratchRoadSelected = (road: FromScratchState['road']): void => {
+    setFromScratch((prev) => prev ? { ...prev, road } : prev);
+  };
+
+  const handleSaveScratch = async (): Promise<void> => {
+    if (!fromScratch?.road) return;
+    const viewBbox = cityBbox;
+    if (!viewBbox) return;
+
+    const names = getNameVariations(fromScratch.query);
+
+    const res = await fetch('/api/routes/from-scratch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ road_id: fromScratch.road.road_id, names, viewBbox }),
+    });
+    if (!res.ok) {
+      console.error('[handleSaveScratch] server error:', await res.text());
+      return;
+    }
+    const { relation_id } = await res.json();
+    setFromScratch(null);
+    if (cityBboxRef.current) await fetchRoutes(cityBboxRef.current);
+    setPanelMode('routes');
+    setPreviewRoutes([]);
+    // Select the newly created route (routePolylines updates after fetchRoutes resolves)
+    setRoutePolylines((prev) => {
+      const match = prev.find((p) => p.relation_id === relation_id);
+      if (match) setSelectedIndex(match.index);
+      return prev;
     });
   };
 
@@ -666,6 +717,8 @@ function App() {
           onIntersectionMove={handleIntersectionMove}
           onCenterChange={handleCenterChange}
           onZoomChange={handleZoomChange}
+          fromScratch={fromScratch}
+          onScratchRoadSelected={handleScratchRoadSelected}
         />
         {panelMode === 'routes' ? (
           <RoutePanel
@@ -708,9 +761,11 @@ function App() {
           <NewRoutePanel
             cityBbox={cityBbox}
             routePolylines={routePolylines}
+            fromScratch={fromScratch}
             onClose={() => {
               setPanelMode('routes');
               setPreviewRoutes([]);
+              setFromScratch(null);
             }}
             onPreviewRoutes={setPreviewRoutes}
             onExistingRouteSelect={(index) => {
@@ -723,6 +778,9 @@ function App() {
               setPanelMode('routes');
               setPreviewRoutes([]);
             }}
+            onEnterScratch={handleEnterScratch}
+            onExitScratch={handleExitScratch}
+            onSaveScratch={handleSaveScratch}
           />
         )}
       </div>

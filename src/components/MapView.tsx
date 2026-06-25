@@ -2,10 +2,11 @@ import React, { useEffect, useRef } from 'react';
 import { MapContainer, TileLayer, GeoJSON, Polyline, Marker, Tooltip, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { RoutePolyline, EndpointInfo, ExtendModeState, TrimModeState, Intersection } from '../types/route';
+import { RoutePolyline, EndpointInfo, ExtendModeState, TrimModeState, Intersection, FromScratchState, FromScratchRoad } from '../types/route';
 import ExtendRouteOverlay from './ExtendRouteOverlay';
 import TrimRouteOverlay from './TrimRouteOverlay';
 import IntersectionOverlay, { IntersectionOverlayProps } from './IntersectionOverlay';
+import FromScratchOverlay from './FromScratchOverlay';
 
 // Fix default marker icon paths broken by webpack
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -181,6 +182,8 @@ interface MapViewProps {
   onIntersectionMove: IntersectionOverlayProps['onMove'];
   onCenterChange: (center: [number, number]) => void;
   onZoomChange: (zoom: number) => void;
+  fromScratch: FromScratchState | null;
+  onScratchRoadSelected: (road: FromScratchRoad) => void;
 }
 
 const MapView: React.FC<MapViewProps> = ({
@@ -213,10 +216,14 @@ const MapView: React.FC<MapViewProps> = ({
   onIntersectionMove,
   onCenterChange,
   onZoomChange,
+  fromScratch,
+  onScratchRoadSelected,
 }) => {
   // In extend mode: hide all routes except the one being extended.
   // In trim mode: hide all routes – TrimRouteOverlay handles rendering.
+  // In from-scratch mode: hide all route polylines.
   const visiblePolylines = (() => {
+    if (fromScratch) return [];
     if (extendMode) {
       return routePolylines.filter((rp) => rp.relation_id === extendMode.relation_id);
     }
@@ -314,6 +321,12 @@ const MapView: React.FC<MapViewProps> = ({
           onRename={onIntersectionRename}
           onMove={onIntersectionMove}
         />
+        {fromScratch && (
+          <FromScratchOverlay
+            selectedRoad={fromScratch.road}
+            onRoadSelected={onScratchRoadSelected}
+          />
+        )}
       </MapContainer>
     </div>
   );

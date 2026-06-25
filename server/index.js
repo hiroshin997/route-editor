@@ -215,8 +215,10 @@ function getPrimaryRouteName(doc) {
   const names = Array.isArray(doc.names) ? doc.names : [];
   if (names.length === 0) return '';
   const primary = names[0];
-  if (!primary || typeof primary.value !== 'string') return '';
-  return primary.value;
+  // Support both string[] (new schema) and {value}[] (old schema)
+  if (typeof primary === 'string') return primary;
+  if (primary && typeof primary.value === 'string') return primary.value;
+  return '';
 }
 
 /**
@@ -642,7 +644,7 @@ app.get('/api/routes/:relation_id/names', async (req, res) => {
 
 /**
  * PUT /api/routes/:relation_id/names
- * Body: { names: [{value, is_global, locations}] }
+ * Body: { names: string[] }
  * Replaces the names array of the specified route.
  */
 app.put('/api/routes/:relation_id/names', async (req, res) => {
@@ -711,7 +713,12 @@ app.get('/api/routes/search-by-name', async (req, res) => {
           'bbox.maxLon': { $gte: bbox.minLon },
           'bbox.minLat': { $lte: bbox.maxLat },
           'bbox.maxLat': { $gte: bbox.minLat },
-          'names.value': { $regex: escapeRegex(q), $options: 'i' },
+          $or: [
+            // new schema: names is string[]
+            { names: { $regex: escapeRegex(q), $options: 'i' } },
+            // old schema: names is [{value, ...}]
+            { 'names.value': { $regex: escapeRegex(q), $options: 'i' } },
+          ],
           is_deleted: { $ne: true },
         },
         { projection: { relation_id: 1, names: 1, _id: 0 } }
@@ -721,7 +728,9 @@ app.get('/api/routes/search-by-name', async (req, res) => {
     res.json(
       docs.map((d) => ({
         relation_id: d.relation_id,
-        name: Array.isArray(d.names) && d.names.length > 0 ? d.names[0].value : '',
+        name: Array.isArray(d.names) && d.names.length > 0
+          ? (typeof d.names[0] === 'string' ? d.names[0] : (d.names[0].value ?? ''))
+          : '',
       }))
     );
   } catch (err) {
@@ -764,6 +773,98 @@ app.post('/api/routes/save', async (req, res) => {
     res.json(result);
   } catch (err) {
     console.error('/api/routes/save error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * GET /api/roads/nearest?lat=&lon=&minLon=&minLat=&maxLon=&maxLat=
+ * Finds the road whose centerline is closest to (lat, lon) within the viewport bbox.
+ * Returns { road_id, name, oneway, coords: [[lon, lat], ...] } or null.
+ */
+app.get('/api/roads/nearest', async (req, res) => {
+  try {
+    const lat = parseFloat(req.query.lat);
+    const lon = parseFloat(req.query.lon);
+    const bbox = parseBboxQuery(req);
+    if (isNaN(lat) || isNaN(lon) || !bbox) {
+      return res.status(400).json({ error: 'lat, lon and bbox params required' });
+    }
+
+    const bboxPoly = {
+      type: 'Polygon',
+      coordinates: [[
+        [bbox.minLon, bbox.minLat],
+        [bbox.maxLon, bbox.minLat],
+        [bbox.maxLon, bbox.maxLat],
+        [bbox.minLon, bbox.maxLat],
+        [bbox.minLon, bbox.minLat],
+      ]],
+    };
+
+    const docs = await osmDb.collection('jproads').find(
+      { centerline: { $geoIntersects: { $geometry: bboxPoly } } },
+      { projection: { _id: 0, id: 1, name: 1, oneway: 1, centerline: 1 } }
+    ).toArray();
+
+    let bestRoadId = null, bestName = '', bestOneway = false, bestCoords = null;
+    let bestDist = Infinity;
+
+    for (const doc of docs) {
+      const roadId = nodeToInt(doc.id);
+      if (roadId === null) continue;
+      const coords = doc?.centerline?.coordinates;
+      if (!Array.isArray(coords) || coords.length < 2) continue;
+
+      for (let i = 0; i < coords.length - 1; i++) {
+        const [lon0, lat0] = coords[i];
+        const [lon1, lat1] = coords[i + 1];
+        const dx = lon1 - lon0, dy = lat1 - lat0;
+        const lenSq = dx * dx + dy * dy;
+        let dist;
+        if (lenSq < 1e-14) {
+          dist = Math.hypot(lat - lat0, lon - lon0);
+        } else {
+          const t = Math.max(0, Math.min(1, ((lon - lon0) * dx + (lat - lat0) * dy) / lenSq));
+          dist = Math.hypot(lat - (lat0 + t * dy), lon - (lon0 + t * dx));
+        }
+        if (dist < bestDist) {
+          bestDist = dist;
+          bestRoadId = roadId;
+          bestName = String(doc.name || '');
+          bestOneway = isForwardOnlyRoad(doc.oneway);
+          bestCoords = coords;
+        }
+      }
+    }
+
+    if (bestRoadId === null) return res.json(null);
+    res.json({ road_id: bestRoadId, name: bestName, oneway: bestOneway, coords: bestCoords });
+  } catch (err) {
+    console.error('/api/roads/nearest error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /api/routes/from-scratch
+ * Body: { road_id, names, viewBbox }
+ * Builds routes from a single road_id (using buildRouteFromRoadIds) and saves to DB.
+ */
+app.post('/api/routes/from-scratch', async (req, res) => {
+  try {
+    const { road_id, names, viewBbox } = req.body;
+    if (!road_id || !Array.isArray(names) || names.length === 0 || !viewBbox) {
+      return res.status(400).json({ error: 'road_id, names, viewBbox required' });
+    }
+    const routeData = await buildRouteFromRoadIds([road_id], viewBbox, osmDb);
+    if (routeData.routes.length === 0) {
+      return res.status(404).json({ error: 'No routes could be built for this road' });
+    }
+    const result = await saveRoute({ ...routeData, names }, osmDb);
+    res.json(result);
+  } catch (err) {
+    console.error('/api/routes/from-scratch error:', err);
     res.status(500).json({ error: err.message });
   }
 });

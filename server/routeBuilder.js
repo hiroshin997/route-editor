@@ -1,5 +1,7 @@
 'use strict';
 
+const { getNameVariations } = require('../src/utils/nameUtils.js');
+
 // ── Math helpers ───────────────────────────────────────────────────────────────
 
 function bearingDegreesInt(lon1, lat1, lon2, lat2) {
@@ -381,33 +383,34 @@ function buildHighwayStat(selected) {
 
 // ── Names builder (port of _build_names from refine_osm_jproad_routes_in_db.py) ─
 
-const VARIATIONS = {
-  GA: ['ヶ', 'ケ', 'が', 'ガ'],
-  NO: ['の', 'ノ', '之', '乃'],
-  TSU: ['つ', 'ツ', 'ッ'],
-};
-const KANJI = '[一-龠]';
-const VARIATION_PATTERNS = Object.fromEntries(
-  Object.entries(VARIATIONS).map(([key, vars]) => [
-    key,
-    new RegExp(`^(.*${KANJI})(${vars.join('|')})(${KANJI}.*)$`),
-  ])
-);
+// const VARIATIONS = {
+//   GA: ['ヶ', 'ケ', 'が', 'ガ'],
+//   NO: ['の', 'ノ', '之', '乃'],
+//   TSU: ['つ', 'ツ', 'ッ'],
+// };
+// const KANJI = '[一-龠]';
+// const VARIATION_PATTERNS = Object.fromEntries(
+//   Object.entries(VARIATIONS).map(([key, vars]) => [
+//     key,
+//     new RegExp(`^(.*${KANJI})(${vars.join('|')})(${KANJI}.*)$`),
+//   ])
+// );
 
-function buildNames(name) {
-  if (!name) return [];
-  const names = [{ value: name, is_global: true, locations: [] }];
-  for (const [key, pattern] of Object.entries(VARIATION_PATTERNS)) {
-    const match = pattern.exec(name);
-    if (!match) continue;
-    const [, prefix, , suffix] = match;
-    for (const v of VARIATIONS[key]) {
-      const newName = `${prefix}${v}${suffix}`;
-      if (newName !== name) names.push({ value: newName, is_global: true, locations: [] });
-    }
-  }
-  return names;
-}
+// function buildNames(name) {
+//   if (!name) return [];
+//   // New schema: names is string[] (primary first, then variations)
+//   const names = [name];
+//   for (const [key, pattern] of Object.entries(VARIATION_PATTERNS)) {
+//     const match = pattern.exec(name);
+//     if (!match) continue;
+//     const [, prefix, , suffix] = match;
+//     for (const v of VARIATIONS[key]) {
+//       const newName = `${prefix}${v}${suffix}`;
+//       if (newName !== name) names.push(newName);
+//     }
+//   }
+//   return names;
+// }
 
 // ── BBox ↔ GeoJSON ────────────────────────────────────────────────────────────
 
@@ -471,7 +474,7 @@ async function buildRoutePreview(roadName, cityBbox, osmDb) {
     .toArray();
 
   if (!roadDocs.length) {
-    return { routes: [], bbox: { minLat: 0, maxLat: 0, minLon: 0, maxLon: 0 }, highway_stat: {}, names: buildNames(roadName) };
+    return { routes: [], bbox: { minLat: 0, maxLat: 0, minLon: 0, maxLon: 0 }, highway_stat: {}, names: getNameVariations(roadName) };
   }
 
   const roadInfoMap = new Map();
@@ -494,7 +497,7 @@ async function buildRoutePreview(roadName, cityBbox, osmDb) {
     routes,
     bbox: buildBbox(routes),
     highway_stat: buildHighwayStat(selected),
-    names: buildNames(roadName),
+    names: getNameVariations(roadName),
   };
 }
 
@@ -524,7 +527,7 @@ async function saveRoute(previewData, osmDb) {
     bbox: previewData.bbox,
     highway_stat: previewData.highway_stat || {},
     names: previewData.names,
-    routes: previewData.routes,
+    routes: applyIntersectionGroupKeys(previewData.routes),
     ref: '',
     network: '',
     updated_at: (() => {
@@ -536,6 +539,22 @@ async function saveRoute(previewData, osmDb) {
 
   const result = await col.insertOne(doc);
   return { relation_id: nextRelationId, _id: result.insertedId };
+}
+
+/**
+ * Set intersection_group_key on all paths when all roads in every path are bidirectional.
+ * Returns the (possibly mutated) routes array.
+ */
+function applyIntersectionGroupKeys(routes) {
+  if (!Array.isArray(routes) || routes.length === 0) return routes;
+  // Check if ALL roads across ALL paths are oneway=false
+  const allBidirectional = routes.every((path) =>
+    (path.roads || []).every((r) => !r.oneway)
+  );
+  if (allBidirectional) {
+    return routes.map((path) => ({ ...path, intersection_group_key: '0' }));
+  }
+  return routes;
 }
 
 module.exports = {

@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom';
 import { Marker, Polyline, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import { Intersection, RoutePolyline } from '../types/route';
+import { getNameVariations } from '../utils/nameUtils';
 
 // ── Snap-to-polyline helpers ──────────────────────────────────────────────────
 
@@ -39,9 +40,10 @@ function snapToPolyline(
 
 // ── Intersection marker icon ──────────────────────────────────────────────────
 
-function createIntersectionIcon(name: string): L.DivIcon {
-  const escaped = name.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  const labelHtml = name
+function createIntersectionIcon(names: string[]): L.DivIcon {
+  const label = names[0] ?? '';
+  const escaped = label.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const labelHtml = label
     ? `<div style="background:#fef08a;color:#000;border:1.5px solid #555;border-radius:2px;padding:1px 5px;font-size:11px;font-weight:bold;margin-left:3px;">${escaped}</div>`
     : '';
   return L.divIcon({
@@ -53,7 +55,7 @@ function createIntersectionIcon(name: string): L.DivIcon {
         <div style="width:5px;height:5px;border-radius:50%;background:#22c55e;"></div>
       </div>${labelHtml}
     </div>`,
-    iconSize: [name ? 130 : 20, 24],
+    iconSize: [label ? 130 : 20, 24],
     iconAnchor: [8, 12],
   });
 }
@@ -78,9 +80,9 @@ export interface IntersectionOverlayProps {
   routePolyline: RoutePolyline | null;
   isEditMode: boolean;
   roadItems: any[];
-  onAdd: (snap: { road_id: number; coord_index: number; lat: number; lon: number }, name: string) => void;
+  onAdd: (snap: { road_id: number; coord_index: number; lat: number; lon: number }, names: string[]) => void;
   onDelete: (id: number) => void;
-  onRename: (id: number, name: string) => void;
+  onRename: (id: number, names: string[]) => void;
   onMove: (id: number, snap: { road_id: number; coord_index: number; lat: number; lon: number }) => void;
 }
 
@@ -98,13 +100,15 @@ const IntersectionOverlay: React.FC<IntersectionOverlayProps> = ({
   const [ctxMenu, setCtxMenu] = useState<CtxMenu>(null);
   const [dialog, setDialog] = useState<Dialog>(null);
   const [nameInput, setNameInput] = useState('');
+  // entries for rename dialog: list of name strings
+  const [renameEntries, setRenameEntries] = useState<string[]>([]);
   const nameInputRef = useRef<HTMLInputElement>(null);
 
   console.log('[IntersectionOverlay] render: intersections=', intersections.length, 'isEditMode=', isEditMode);
   // Log positions of first 3 intersections to verify lat/lon
   if (intersections.length > 0) {
     console.log('[IntersectionOverlay] positions[0..2]:',
-      intersections.slice(0, 3).map((i) => ({ id: i.intersection_id, lat: i.lat, lon: i.lon, name: i.name })));
+      intersections.slice(0, 3).map((i) => ({ id: i.intersection_id, lat: i.lat, lon: i.lon, names: i.names })));
   }
 
   // Close context menu on map click
@@ -164,7 +168,8 @@ const IntersectionOverlay: React.FC<IntersectionOverlayProps> = ({
     if (ctxMenu?.type !== 'marker') return;
     const inter = ctxMenu.intersection;
     setCtxMenu(null);
-    openDialog({ type: 'rename', intersection: inter }, inter.name);
+    setRenameEntries(inter.names.length > 0 ? [...inter.names] : ['']);
+    setDialog({ type: 'rename', intersection: inter });
   };
 
   const handleCtxDelete = () => {
@@ -180,19 +185,22 @@ const IntersectionOverlay: React.FC<IntersectionOverlayProps> = ({
     console.log('[handleDialogOk] called, dialog=', dialog, 'nameInput=', nameInput);
     if (!dialog) return;
     if (dialog.type === 'add-name') {
-      onAdd(dialog.snapResult, nameInput);
+      onAdd(dialog.snapResult, getNameVariations(nameInput));
     } else if (dialog.type === 'rename') {
-      onRename(dialog.intersection.intersection_id, nameInput);
+      const clean = renameEntries.filter((s) => s.trim());
+      if (clean.length > 0) onRename(dialog.intersection.intersection_id, clean);
     } else if (dialog.type === 'delete') {
       onDelete(dialog.intersection.intersection_id);
     }
     setDialog(null);
     setNameInput('');
+    setRenameEntries([]);
   };
 
   const handleDialogCancel = () => {
     setDialog(null);
     setNameInput('');
+    setRenameEntries([]);
   };
 
   const mapContainer = map.getContainer();
@@ -219,7 +227,7 @@ const IntersectionOverlay: React.FC<IntersectionOverlayProps> = ({
           <Marker
             key={inter.intersection_id}
             position={pos}
-            icon={createIntersectionIcon(inter.name)}
+            icon={createIntersectionIcon(inter.names)}
             draggable={isEditMode}
             eventHandlers={{
               contextmenu: (e) => handleMarkerContextMenu(e, inter),
@@ -267,6 +275,45 @@ const IntersectionOverlay: React.FC<IntersectionOverlayProps> = ({
                 </p>
                 <div className="intersection-dialog-buttons">
                   <button className="intersection-dialog-ok" onClick={handleDialogOk}>ok</button>
+                  <button className="intersection-dialog-cancel" onClick={handleDialogCancel}>cancel</button>
+                </div>
+              </>
+            ) : dialog.type === 'rename' ? (
+              <>
+                <p className="intersection-dialog-msg">交差点名を編集します</p>
+                <div className="names-modal-list">
+                  {renameEntries.map((entry, idx) => (
+                    <div key={idx} className="names-modal-row">
+                      <input
+                        className="names-modal-input"
+                        type="text"
+                        value={entry}
+                        onChange={(e) =>
+                          setRenameEntries((prev) => prev.map((v, i) => i === idx ? e.target.value : v))
+                        }
+                      />
+                      <button
+                        className="names-modal-del-btn"
+                        title="削除"
+                        onClick={() =>
+                          setRenameEntries((prev) => prev.filter((_, i) => i !== idx))
+                        }
+                      >×</button>
+                    </div>
+                  ))}
+                </div>
+                <button
+                  className="names-modal-add-btn"
+                  onClick={() => setRenameEntries((prev) => [...prev, ''])}
+                >
+                  + new name
+                </button>
+                <div className="intersection-dialog-buttons">
+                  <button
+                    className="intersection-dialog-ok"
+                    disabled={renameEntries.every((s) => !s.trim())}
+                    onClick={handleDialogOk}
+                  >ok</button>
                   <button className="intersection-dialog-cancel" onClick={handleDialogCancel}>cancel</button>
                 </div>
               </>
