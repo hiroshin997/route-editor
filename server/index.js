@@ -448,7 +448,7 @@ app.put('/api/routes/:relation_id/intersections', async (req, res) => {
 
     // Apply any new intersection_group_key values to routes
     for (const { path_idx, key } of routes_key_updates) {
-      $set[`routes.${path_idx}.intersection_group_key`] = key;
+      $set[`routes.${path_idx}.intersection_group_key`] = parseInt(key);
     }
 
     await col.updateOne({ relation_id }, { $set });
@@ -920,12 +920,11 @@ app.post('/api/routes/save', async (req, res) => {
       (p) => (p.roads || []).map((r) => Number(r.road_id))
     );
     const updatedGroups = await buildUpdatedIntersectionGroups(routesWithKeys, allRoadIds, {});
-    if (updatedGroups) {
-      await osmDb.collection(ROUTES_COLLECTION).updateOne(
-        { relation_id: result.relation_id },
-        { $set: { intersection_groups: updatedGroups } }
-      );
-    }
+    // Always persist intersection_groups (default to empty group when no intersections found)
+    await osmDb.collection(ROUTES_COLLECTION).updateOne(
+      { relation_id: result.relation_id },
+      { $set: { intersection_groups: updatedGroups ?? { '0': [] } } }
+    );
     res.json(result);
   } catch (err) {
     console.error('/api/routes/save error:', err);
@@ -1021,12 +1020,11 @@ app.post('/api/routes/from-scratch', async (req, res) => {
     // Add intersections for the selected road
     const routesWithKeys = applyIntersectionGroupKeys(routeData.routes);
     const updatedGroups = await buildUpdatedIntersectionGroups(routesWithKeys, [Number(road_id)], {});
-    if (updatedGroups) {
-      await osmDb.collection(ROUTES_COLLECTION).updateOne(
-        { relation_id: result.relation_id },
-        { $set: { intersection_groups: updatedGroups } }
-      );
-    }
+    // Always persist intersection_groups (default to empty group when no intersections found)
+    await osmDb.collection(ROUTES_COLLECTION).updateOne(
+      { relation_id: result.relation_id },
+      { $set: { intersection_groups: updatedGroups ?? { '0': [] } } }
+    );
     res.json(result);
   } catch (err) {
     console.error('/api/routes/from-scratch error:', err);

@@ -542,19 +542,12 @@ async function saveRoute(previewData, osmDb) {
 }
 
 /**
- * Set intersection_group_key on all paths when all roads in every path are bidirectional.
- * Returns the (possibly mutated) routes array.
+ * Set intersection_group_key='0' on every path unconditionally.
+ * intersection_groups is always required; the default value is { '0': [] }.
  */
 function applyIntersectionGroupKeys(routes) {
   if (!Array.isArray(routes) || routes.length === 0) return routes;
-  // Check if ALL roads across ALL paths are oneway=false
-  const allBidirectional = routes.every((path) =>
-    (path.roads || []).every((r) => !r.oneway)
-  );
-  if (allBidirectional) {
-    return routes.map((path) => ({ ...path, intersection_group_key: '0' }));
-  }
-  return routes;
+  return routes.map((path) => ({ ...path, intersection_group_key: '0' }));
 }
 
 module.exports = {
