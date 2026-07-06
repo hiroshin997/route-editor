@@ -45,7 +45,7 @@ function ArrowPath({
   const h1y = ey + HEAD_LEN * Math.sin(angle + Math.PI - HEAD_SPREAD);
   const h2x = ex + HEAD_LEN * Math.cos(angle + Math.PI + HEAD_SPREAD);
   const h2y = ey + HEAD_LEN * Math.sin(angle + Math.PI + HEAD_SPREAD);
-  const color = selected ? '#2563eb' : '#f97316';
+  const color = selected ? '#2563eb' : '#d4d4d8';
 
   return (
     <g onClick={onClick} style={{ cursor: 'pointer' }}>

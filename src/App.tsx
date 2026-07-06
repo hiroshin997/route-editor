@@ -67,9 +67,9 @@ function App() {
   const cityBboxRef = useRef<BBox | null>(saved?.cityBbox ?? null);
   latestRef.current = { selections, zoom, mapCenter };
 
-  // Close newRoute / trim / intersection panel when zoom drops below 14
+  // Close newRoute / trim / intersection panel when zoom drops below 10
   useEffect(() => {
-    if (zoom < 14 && (panelMode === 'newRoute' || panelMode === 'trim' || panelMode === 'intersection')) {
+    if (zoom < 10 && (panelMode === 'newRoute' || panelMode === 'trim' || panelMode === 'intersection')) {
       setPanelMode('routes');
       setPreviewRoutes([]);
       setTrimMode(null);
@@ -333,7 +333,8 @@ function App() {
 
     setExtendMode((prev) => {
       if (!prev?.modal) return prev;
-      return { ...prev, modal: { ...prev.modal, arrows } };
+      const autoSelect = arrows.length === 1 ? arrows[0].road_id : null;
+      return { ...prev, modal: { ...prev.modal, arrows, selected_road_id: autoSelect } };
     });
   };
 
@@ -382,7 +383,8 @@ function App() {
 
     setExtendMode((prev) => {
       if (!prev?.modal) return prev;
-      return { ...prev, modal: { ...prev.modal, arrows: newArrows } };
+      const autoSelect = newArrows.length === 1 ? newArrows[0].road_id : null;
+      return { ...prev, modal: { ...prev.modal, arrows: newArrows, selected_road_id: autoSelect } };
     });
   };
 

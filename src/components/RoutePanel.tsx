@@ -38,14 +38,14 @@ const RoutePanel: React.FC<RoutePanelProps> = ({
   onIntersectionRoute,
   intersectionRelationId,
 }) => {
-  const newRouteEnabled = citySelected && zoom >= 14;
+  const newRouteEnabled = citySelected && zoom >= 10;
   return (
     <div className="route-panel">
       <button
         className="new-route-open-btn"
         disabled={!newRouteEnabled}
         onClick={onNewRoute}
-        title={!citySelected ? '市区町村を選択してください' : zoom < 14 ? 'ズームレベル14以上にしてください' : ''}
+        title={!citySelected ? '市区町村を選択してください' : zoom < 10 ? 'ズームレベル10以上にしてください' : ''}
       >
         ＋ new route
       </button>
