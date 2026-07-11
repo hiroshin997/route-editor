@@ -550,10 +550,40 @@ function applyIntersectionGroupKeys(routes) {
   return routes.map((path) => ({ ...path, intersection_group_key: '0' }));
 }
 
+/**
+ * Build path items for a list of ordered pending roads with direction info.
+ * Used for direct route extension (bypasses the chaining algorithm).
+ *
+ * @param {object[]} roadDocs       - raw jproads documents
+ * @param {Array<{road_id, direction: 'ascend'|'descend'}>} pendingRoads
+ * @returns {object[]} path items (without side_road_ids; caller sets them)
+ */
+function buildRoadItemsForDirections(roadDocs, pendingRoads) {
+  const docMap = new Map();
+  for (const doc of roadDocs) {
+    const id = nodeToInt(doc.id);
+    if (id !== null) docMap.set(id, doc);
+  }
+  const items = [];
+  for (const pr of pendingRoads) {
+    const doc = docMap.get(Number(pr.road_id));
+    if (!doc) continue;
+    const info = buildRoadInfo(doc);
+    if (!info) continue;
+    const widthM = info.widthM != null ? info.widthM
+      : (info.highway ? DEFAULT_WIDTH_M_PER_HIGHWAY[info.highway] || DEFAULT_WIDTH_M : DEFAULT_WIDTH_M);
+    const ascendSectors = buildRoadSectorsAscend(info);
+    const sectors = pr.direction === 'ascend' ? ascendSectors : cloneSectorsDescend(ascendSectors);
+    items.push({ road_id: info.roadId, oneway: info.isForwardOnly, width_m: widthM, road_sectors: sectors });
+  }
+  return items;
+}
+
 module.exports = {
   buildRoutePreview,
   saveRoute,
   buildRouteFromRoadIds,
+  buildRoadItemsForDirections,
   applyIntersectionGroupKeys,
   // Exported utilities for use in index.js
   nodeToInt,

@@ -394,7 +394,14 @@ function App() {
     const res = await fetch(`/api/routes/${extendMode.relation_id}/extend`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ city_bbox: cityBbox, new_road_ids: newRoadIds }),
+      body: JSON.stringify({
+        city_bbox: cityBbox,
+        new_road_ids: newRoadIds,
+        // Direct extension context – enables bypass of the chaining algorithm
+        path_idx: extendMode.modal?.path_idx,
+        endpoint_type: extendMode.modal?.endpoint_type,
+        pending_roads: extendMode.pending_roads,
+      }),
     });
     if (res.ok) {
       if (cityBboxRef.current) await fetchRoutes(cityBboxRef.current);

@@ -4,7 +4,7 @@ const express = require('express');
 const { MongoClient } = require('mongodb');
 const cors = require('cors');
 
-const { buildRoutePreview, saveRoute, buildRouteFromRoadIds, applyIntersectionGroupKeys, nodeToInt, isForwardOnlyRoad, bearingDegreesInt, hubenyJapanM, ROAD_PROJECTION } = require('./routeBuilder');
+const { buildRoutePreview, saveRoute, buildRouteFromRoadIds, buildRoadItemsForDirections, applyIntersectionGroupKeys, nodeToInt, isForwardOnlyRoad, bearingDegreesInt, hubenyJapanM, ROAD_PROJECTION } = require('./routeBuilder');
 const { getNameVariations } = require('../src/utils/nameUtils');
 
 const app = express();
@@ -15,7 +15,7 @@ const COLLECTION = 'boundaries';
 const ROUTES_COLLECTION = 'jproad_routes';
 
 app.use(cors({ origin: 'http://localhost:3000' }));
-app.use(express.json());
+app.use(express.json({ limit: '20mb' }));
 
 let estatDb;
 let osmDb;
@@ -707,13 +707,18 @@ app.get('/api/roads/at-node', async (req, res) => {
 
 /**
  * POST /api/routes/:relation_id/extend
- * Body: { city_bbox, new_road_ids }
- * Appends new roads to the route, rebuilds doc.routes via Step1–Step4, saves.
+ * Body: { new_road_ids, path_idx, endpoint_type, pending_roads, city_bbox }
+ *
+ * When path_idx + endpoint_type + pending_roads (with direction) are supplied,
+ * directly appends/prepends road items to the specified path and its reverse path
+ * by processing pending_roads sequentially.
+ * Handles the special case where a one-way road forces the route to be reversed.
+ * Falls back to rebuild-from-scratch when those fields are absent.
  */
 app.post('/api/routes/:relation_id/extend', async (req, res) => {
   try {
     const relation_id = parseInt(req.params.relation_id, 10);
-    const { city_bbox, new_road_ids } = req.body;
+    const { city_bbox, new_road_ids, path_idx, endpoint_type, pending_roads: pendingRoadsInput } = req.body;
     if (!Array.isArray(new_road_ids) || !new_road_ids.length) {
       return res.status(400).json({ error: 'new_road_ids required' });
     }
@@ -722,7 +727,206 @@ app.post('/api/routes/:relation_id/extend', async (req, res) => {
     const doc = await col.findOne({ relation_id }, { projection: { routes: 1, intersection_groups: 1, _id: 0 } });
     if (!doc) return res.status(404).json({ error: 'Not found' });
 
-    // Collect existing road IDs from current doc.routes
+    const pad = (n) => String(n).padStart(2, '0');
+    const jst = new Date(Date.now() + 9 * 3600 * 1000);
+    const updated_at = `${jst.getUTCFullYear()}-${pad(jst.getUTCMonth()+1)}-${pad(jst.getUTCDate())}T${pad(jst.getUTCHours())}:${pad(jst.getUTCMinutes())}:${pad(jst.getUTCSeconds())}+09:00`;
+
+    // ── Direct extension (preferred path) ─────────────────────────────────────
+    if (Array.isArray(pendingRoadsInput) && pendingRoadsInput.length &&
+        path_idx != null && endpoint_type) {
+
+      const newRoadIds = pendingRoadsInput.map((pr) => Number(pr.road_id));
+      const newRoadDocs = await osmDb.collection('jproads')
+        .find({ id: { $in: newRoadIds } }, { projection: ROAD_PROJECTION })
+        .toArray();
+
+      const roadDocMap = new Map();
+      for (const rdoc of newRoadDocs) {
+        const id = nodeToInt(rdoc.id);
+        if (id !== null) roadDocMap.set(id, rdoc);
+      }
+
+      // ── Local helpers ────────────────────────────────────────────────────────
+
+      /** Traversal-start node of a path (first road, first sector). */
+      const getStartNode = (path) => {
+        const s = path.roads[0]?.road_sectors?.[0];
+        if (!s) return -1;
+        return s.direction === 'ascend' ? s.min_node_id : s.max_node_id;
+      };
+
+      /** Traversal-end node of a path (last road, last sector). */
+      const getEndNode = (path) => {
+        const road = path.roads[path.roads.length - 1];
+        const s = road?.road_sectors?.[road.road_sectors.length - 1];
+        if (!s) return -1;
+        return s.direction === 'ascend' ? s.max_node_id : s.min_node_id;
+      };
+
+      /**
+       * Reverse roads array:
+       *   (1) reverse roads order
+       *   (2) reverse road_sectors within each road
+       *   (3) flip each sector's direction ascend↔descend
+       * min/max_side_road_id are unchanged (they refer to road endpoint nodes, not path order).
+       */
+      const reverseRoadsArr = (roads) =>
+        [...roads].reverse().map((road) => ({
+          ...road,
+          road_sectors: [...road.road_sectors].reverse().map((s) => ({
+            ...s,
+            direction: s.direction === 'ascend' ? 'descend' : 'ascend',
+          })),
+        }));
+
+      const flipDir = (dir) => (dir === 'ascend' ? 'descend' : 'ascend');
+
+      /** Build a single road item for the given traversal direction. */
+      const makeItem = (rdoc, direction) => {
+        const items = buildRoadItemsForDirections([rdoc], [{ road_id: nodeToInt(rdoc.id), direction }]);
+        return items[0] ?? null;
+      };
+
+      /** Attach min/max_side_road_id to a road item. */
+      const withSide = (item, prevId, nextId) => {
+        const dir = item.road_sectors?.[0]?.direction;
+        return {
+          ...item,
+          min_side_road_id: dir === 'ascend' ? prevId : nextId,
+          max_side_road_id: dir === 'ascend' ? nextId : prevId,
+        };
+      };
+
+      // ── Sequential processing ────────────────────────────────────────────────
+
+      let curEpType = endpoint_type; // 'start' | 'end', may flip on special case
+      let reversedOccurred = false;
+      const routes = doc.routes.map((p) => ({ ...p, roads: [...(p.roads || [])] }));
+      const revIdx = routes.length === 2 ? (path_idx === 0 ? 1 : 0) : -1;
+
+      for (const pr of pendingRoadsInput) {
+        const roadId = Number(pr.road_id);
+        const rdoc = roadDocMap.get(roadId);
+        if (!rdoc) continue;
+
+        const primPath = routes[path_idx];
+        const node_id = curEpType === 'end' ? getEndNode(primPath) : getStartNode(primPath);
+        const hasOneway = primPath.roads.some((r) => r.oneway);
+        const roadOneway = isForwardOnlyRoad(rdoc.oneway);
+
+        // Special case: all-bidirectional route receives a one-way road in the "wrong" direction.
+        //   'start' + direction='ascend' → from_node=node_id, one-way going AWAY → can't arrive
+        //   'end'   + direction='descend' → to_node=node_id, one-way going AWAY (backward) → can't depart
+        const isSpecial = !hasOneway && roadOneway && (
+          (curEpType === 'start' && pr.direction === 'ascend') ||
+          (curEpType === 'end'   && pr.direction === 'descend')
+        );
+
+        if (isSpecial) {
+          // Reverse both paths so the "start" becomes "end" (or vice-versa),
+          // then switch to the opposite endpoint type for this road and all subsequent.
+          routes[path_idx] = { ...routes[path_idx], roads: reverseRoadsArr(routes[path_idx].roads) };
+          if (revIdx >= 0) {
+            routes[revIdx] = { ...routes[revIdx], roads: reverseRoadsArr(routes[revIdx].roads) };
+          }
+          curEpType = curEpType === 'start' ? 'end' : 'start';
+          reversedOccurred = true;
+        }
+
+        // Build road item for primary path.
+        // 'end' (append)  → use direction as-is (road departs from node_id)
+        // 'start' (prepend) → flip direction (road must arrive at node_id)
+        const primDir = curEpType === 'start' ? flipDir(pr.direction) : pr.direction;
+        const primItem = makeItem(rdoc, primDir);
+        if (!primItem) continue;
+
+        // Apply to primary path
+        {
+          const roads = [...routes[path_idx].roads];
+          if (curEpType === 'end') {
+            if (roads.length > 0) {
+              const last = { ...roads[roads.length - 1] };
+              const d = last.road_sectors?.[0]?.direction;
+              if (d === 'ascend') last.max_side_road_id = primItem.road_id;
+              else                last.min_side_road_id = primItem.road_id;
+              roads[roads.length - 1] = last;
+            }
+            const prevId = roads.length > 0 ? roads[roads.length - 1].road_id : -1;
+            roads.push(withSide(primItem, prevId, -1));
+          } else { // 'start'
+            if (roads.length > 0) {
+              const first = { ...roads[0] };
+              const d = first.road_sectors?.[0]?.direction;
+              if (d === 'ascend') first.min_side_road_id = primItem.road_id;
+              else                first.max_side_road_id = primItem.road_id;
+              roads[0] = first;
+            }
+            const nextId = roads.length > 0 ? roads[0].road_id : -1;
+            roads.unshift(withSide(primItem, -1, nextId));
+          }
+          routes[path_idx] = { ...routes[path_idx], roads };
+        }
+
+        // Apply to reverse path (bidirectional roads only; skipped after special case).
+        if (!isSpecial && revIdx >= 0 && !roadOneway) {
+          const revDir = flipDir(primDir);
+          const revItem = makeItem(rdoc, revDir);
+          if (revItem) {
+            const revPath = routes[revIdx];
+            const roads = [...revPath.roads];
+            if (curEpType === 'end') {
+              // Prepend to revIdx if its start node matches node_id
+              if (getStartNode(revPath) === node_id) {
+                if (roads.length > 0) {
+                  const first = { ...roads[0] };
+                  const d = first.road_sectors?.[0]?.direction;
+                  if (d === 'ascend') first.min_side_road_id = revItem.road_id;
+                  else                first.max_side_road_id = revItem.road_id;
+                  roads[0] = first;
+                }
+                const nextId = roads.length > 0 ? roads[0].road_id : -1;
+                roads.unshift(withSide(revItem, -1, nextId));
+                routes[revIdx] = { ...routes[revIdx], roads };
+              }
+            } else { // 'start'
+              // Append to revIdx if its end node matches node_id
+              if (getEndNode(revPath) === node_id) {
+                if (roads.length > 0) {
+                  const last = { ...roads[roads.length - 1] };
+                  const d = last.road_sectors?.[0]?.direction;
+                  if (d === 'ascend') last.max_side_road_id = revItem.road_id;
+                  else                last.min_side_road_id = revItem.road_id;
+                  roads[roads.length - 1] = last;
+                }
+                const prevId = roads.length > 0 ? roads[roads.length - 1].road_id : -1;
+                roads.push(withSide(revItem, prevId, -1));
+                routes[revIdx] = { ...routes[revIdx], roads };
+              }
+            }
+          }
+        }
+      } // end sequential loop
+
+      // ── Compute top-level roads list and save ────────────────────────────────
+      const existingTopIds = new Set(
+        (doc.routes || []).flatMap((p) => (p.roads || []).map((r) => Number(r.road_id)))
+      );
+      const allRoadsTop = [
+        ...Array.from(existingTopIds).map((id) => ({ road_id: id, role: '' })),
+        ...newRoadIds.filter((id) => !existingTopIds.has(id)).map((id) => ({ road_id: id, role: '' })),
+      ];
+
+      const bbox = computeBboxFromPaths(routes);
+      const existingGroups = doc.intersection_groups || {};
+      const updatedGroups = await buildUpdatedIntersectionGroups(routes, newRoadIds, existingGroups);
+
+      const $set = { routes, bbox, roads: allRoadsTop, updated_at };
+      if (updatedGroups) $set.intersection_groups = updatedGroups;
+      await col.updateOne({ relation_id }, { $set });
+      return res.json({ ok: true, endpoint_type_changed: reversedOccurred });
+    }
+
+    // ── Fallback: rebuild from scratch (for backward compatibility) ───────────
     const existingIds = new Set();
     for (const path of (doc.routes || [])) {
       for (const item of (path.roads || [])) {
@@ -730,20 +934,14 @@ app.post('/api/routes/:relation_id/extend', async (req, res) => {
         if (!isNaN(id)) existingIds.add(id);
       }
     }
-
     const allIds = [...existingIds, ...new_road_ids.map(Number)];
-    const rebuilt = await buildRouteFromRoadIds(allIds, city_bbox || null, osmDb);
+    // Pass null for cityBbox to skip step35Filter (geographic filter causes roads to be lost)
+    const rebuilt = await buildRouteFromRoadIds(allIds, null, osmDb);
     const routesWithKeys = applyIntersectionGroupKeys(rebuilt.routes);
 
-    // ISO datetime in JST
-    const pad = (n) => String(n).padStart(2, '0');
-    const jst = new Date(Date.now() + 9 * 3600 * 1000);
-    const updated_at = `${jst.getUTCFullYear()}-${pad(jst.getUTCMonth()+1)}-${pad(jst.getUTCDate())}T${pad(jst.getUTCHours())}:${pad(jst.getUTCMinutes())}:${pad(jst.getUTCSeconds())}+09:00`;
-
-    // Append intersections for the newly added roads
-    const existingGroups = doc.intersection_groups || {};
-    const updatedGroups = await buildUpdatedIntersectionGroups(
-      routesWithKeys, new_road_ids.map(Number), existingGroups
+    const existingGroupsFb = doc.intersection_groups || {};
+    const updatedGroupsFb = await buildUpdatedIntersectionGroups(
+      routesWithKeys, new_road_ids.map(Number), existingGroupsFb
     );
 
     const $setPayload = {
@@ -753,7 +951,7 @@ app.post('/api/routes/:relation_id/extend', async (req, res) => {
       roads: allIds.map((id) => ({ road_id: id, role: '' })),
       updated_at,
     };
-    if (updatedGroups) $setPayload.intersection_groups = updatedGroups;
+    if (updatedGroupsFb) $setPayload.intersection_groups = updatedGroupsFb;
 
     await col.updateOne({ relation_id }, { $set: $setPayload });
     res.json({ ok: true });
