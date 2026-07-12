@@ -44,7 +44,7 @@ function buildOptionsQuery(level, parents) {
   ];
 
   if (level === 2) {
-    return { 'properties.admin_level': 8, $and: andConditions };
+    return { 'properties.admin_level': { $gte: 7, $lte: 8 }, $and: andConditions };
   } else if (level === 3) {
     return { 'properties.admin_level': { $gte: 8 }, $and: andConditions };
   } else {
@@ -226,12 +226,6 @@ async function buildUpdatedIntersectionGroups(routes, newRoadIds, existingGroups
 
   if (Object.keys(keyToNewRoads).length === 0) return null;
 
-  // Collect all names already used across ALL groups (to avoid duplicates)
-  const allUsedNames = new Set(
-    Object.values(existingGroups || {}).flat()
-      .flatMap((i) => (Array.isArray(i.names) ? i.names : []))
-  );
-
   const updated = { ...(existingGroups || {}) };
   let changed = false;
 
@@ -241,10 +235,16 @@ async function buildUpdatedIntersectionGroups(routes, newRoadIds, existingGroups
       .find({ 'refined_roads.road_id': { $in: roadIds } })
       .toArray();
 
-    const newItems = buildIntersectionGroup(docs, roadIds, [...allUsedNames]);
+    // Use only names already in THIS group to avoid false deduplication across
+    // groups that share the same physical roads (e.g. key "0" vs key "1").
+    const usedNamesForKey = new Set(
+      ((existingGroups || {})[key] || [])
+        .flatMap((i) => (Array.isArray(i.names) ? i.names : []))
+    );
+
+    const newItems = buildIntersectionGroup(docs, roadIds, [...usedNamesForKey]);
     if (newItems.length > 0) {
       updated[key] = [...(updated[key] || []), ...newItems];
-      newItems.forEach((item) => (item.names || []).forEach((n) => allUsedNames.add(n)));
       changed = true;
     }
   }
@@ -607,8 +607,8 @@ app.get('/api/routes/:relation_id/endpoints', async (req, res) => {
       const endLat = lastDir === 'ascend' ? lastSector.lat1 : lastSector.lat0;
       const endLon = lastDir === 'ascend' ? lastSector.lon1 : lastSector.lon0;
 
-      endpoints.push({ path_idx: i, endpoint: 'start', lat: startLat, lon: startLon, node_id: startNodeId, road_id: parseInt(firstRoad.road_id, 10) });
-      endpoints.push({ path_idx: i, endpoint: 'end',   lat: endLat,   lon: endLon,   node_id: endNodeId,   road_id: parseInt(lastRoad.road_id, 10)  });
+      endpoints.push({ path_idx: i, endpoint: 'start', lat: startLat, lon: startLon, node_id: startNodeId, road_id: parseInt(firstRoad.road_id, 10), has_oneway: pathRoads.some((r) => r.oneway), has_sub_oneway: (doc.routes || []).filter((_, j) => j !== i).some((p) => (p.roads || []).some((r) => r.oneway)) });
+      endpoints.push({ path_idx: i, endpoint: 'end',   lat: endLat,   lon: endLon,   node_id: endNodeId,   road_id: parseInt(lastRoad.road_id, 10),  has_oneway: pathRoads.some((r) => r.oneway), has_sub_oneway: (doc.routes || []).filter((_, j) => j !== i).some((p) => (p.roads || []).some((r) => r.oneway)) });
     }
 
     res.json(endpoints);
@@ -678,8 +678,10 @@ app.get('/api/roads/at-node', async (req, res) => {
         });
       }
 
-      // Entry from end → descending travel (bidirectional only)
-      if (isAtEnd && !oneway && !isAtStart) {
+      // Entry from end → descending travel
+      // Includes one-way roads where the junction is at to_node: these trigger the
+      // special route-reversal case in the extend logic (see isSpecial in extend endpoint).
+      if (isAtEnd && !isAtStart) {
         const n = coords.length;
         results.push({
           road_id: roadId,
@@ -813,11 +815,24 @@ app.post('/api/routes/:relation_id/extend', async (req, res) => {
         const node_id = curEpType === 'end' ? getEndNode(primPath) : getStartNode(primPath);
         const hasOneway = primPath.roads.some((r) => r.oneway);
         const roadOneway = isForwardOnlyRoad(rdoc.oneway);
+        // Whether the reverse path already has any one-way road (makes reverse_roads invalid)
+        const hasSubOneway = revIdx >= 0 ? routes[revIdx].roads.some((r) => r.oneway) : false;
 
-        // Special case: all-bidirectional route receives a one-way road in the "wrong" direction.
+        // Skip one-way roads that are physically invalid for has-oneway routes.
+        // The special route-reversal case only fires when !hasOneway && !hasSubOneway,
+        // so these combinations are invalid when either path already has a one-way road:
+        //   'end'   + one-way + descend  (to_node=node_id  – can't depart backward)
+        //   'start' + one-way + ascend   (from_node=node_id – can't arrive backward)
+        if ((hasOneway || hasSubOneway) && roadOneway && (
+          (curEpType === 'end'   && pr.direction === 'descend') ||
+          (curEpType === 'start' && pr.direction === 'ascend')
+        )) continue;
+
+        // Special case: both paths are all-bidirectional AND the new road is one-way
+        // in the "wrong" direction.  Reverse both paths and flip endpoint_type.
         //   'start' + direction='ascend' → from_node=node_id, one-way going AWAY → can't arrive
         //   'end'   + direction='descend' → to_node=node_id, one-way going AWAY (backward) → can't depart
-        const isSpecial = !hasOneway && roadOneway && (
+        const isSpecial = !hasOneway && !hasSubOneway && roadOneway && (
           (curEpType === 'start' && pr.direction === 'ascend') ||
           (curEpType === 'end'   && pr.direction === 'descend')
         );
@@ -1210,7 +1225,8 @@ app.post('/api/routes/from-scratch', async (req, res) => {
     if (!road_id || !Array.isArray(names) || names.length === 0 || !viewBbox) {
       return res.status(400).json({ error: 'road_id, names, viewBbox required' });
     }
-    const routeData = await buildRouteFromRoadIds([road_id], viewBbox, osmDb);
+    // Pass null as cityBbox to skip step35Filter – the road is already known (user selected it)
+    const routeData = await buildRouteFromRoadIds([road_id], null, osmDb);
     if (routeData.routes.length === 0) {
       return res.status(404).json({ error: 'No routes could be built for this road' });
     }

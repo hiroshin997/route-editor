@@ -129,6 +129,10 @@ export interface EndpointInfo {
   lon: number;
   node_id: number;
   road_id: number;
+  /** Whether the path already contains at least one one-way road. */
+  has_oneway: boolean;
+  /** Whether the OTHER path (routes[i^1]) already contains at least one one-way road. */
+  has_sub_oneway: boolean;
 }
 
 export interface RoadArrow {
@@ -149,6 +153,7 @@ export interface RoadArrow {
 export interface PendingRoadItem {
   road_id: number;
   direction: 'ascend' | 'descend';
+  oneway: boolean;
   coords: [number, number][];
   new_node_id: number;
   new_lat: number;
@@ -160,6 +165,10 @@ export interface ExtendModalState {
   node_id: number;
   path_idx: number;
   endpoint_type: 'start' | 'end';
+  /** Whether the primary path currently has at least one one-way road. */
+  has_oneway: boolean;
+  /** Whether the reverse path (routes[i^1]) has at least one one-way road. */
+  has_sub_oneway: boolean;
   /** null = loading */
   arrows: RoadArrow[] | null;
   selected_road_id: number | null;
