@@ -687,6 +687,17 @@ body,
   color: #111;
 }
 
+.extend-modal-ff-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px 0;
+  font-size: 12px;
+  color: #444;
+  cursor: pointer;
+  user-select: none;
+}
+
 .extend-modal-buttons {
   display: flex;
   gap: 6px;

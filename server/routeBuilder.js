@@ -545,9 +545,18 @@ async function saveRoute(previewData, osmDb) {
  * Set intersection_group_key='0' on every path unconditionally.
  * intersection_groups is always required; the default value is { '0': [] }.
  */
+/**
+ * Assign intersection_group_key to every path.
+ * routes.length === 1 → all paths get key '0'
+ * routes.length >= 2  → each path gets its own key equal to its index
+ *   (routes[0] → '0', routes[1] → '1', ...)
+ */
 function applyIntersectionGroupKeys(routes) {
   if (!Array.isArray(routes) || routes.length === 0) return routes;
-  return routes.map((path) => ({ ...path, intersection_group_key: '0' }));
+  if (routes.length === 1) {
+    return [{ ...routes[0], intersection_group_key: '0' }];
+  }
+  return routes.map((path, i) => ({ ...path, intersection_group_key: String(i) }));
 }
 
 /**

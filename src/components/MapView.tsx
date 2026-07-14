@@ -172,7 +172,7 @@ interface MapViewProps {
   onSelectedIndexChange: (index: number | null) => void;
   onEndpointClick: (ep: EndpointInfo) => void;
   onArrowSelect: (roadId: number) => void;
-  onForward: () => void;
+  onForward: (fastForward: boolean) => void;
   onSaveAndClose: () => void;
   onCancelExtend: () => void;
   onTrimStart: () => void;

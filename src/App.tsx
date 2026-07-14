@@ -319,7 +319,7 @@ function App() {
     try {
       const res = await fetch(`/api/routes/${relation_id}/endpoints`);
       const endpoints: EndpointInfo[] = await res.json();
-      setExtendMode({ relation_id, endpoints, modal: null, pending_roads: [] });
+      setExtendMode({ relation_id, endpoints, modal: null, pending_roads: [], fastForwardResetToken: 0 });
     } catch (e) {
       console.error('[App] failed to fetch endpoints:', e);
     }
@@ -377,66 +377,96 @@ function App() {
     });
   };
 
-  const handleForward = async (): Promise<void> => {
+  const handleForward = async (fastForward = false): Promise<void> => {
     if (!extendMode?.modal?.selected_road_id) return;
-    const modal = extendMode.modal;
-    const arrow = modal.arrows?.find((a) => a.road_id === modal.selected_road_id);
-    if (!arrow) return;
 
-    const newPending: PendingRoadItem = {
-      road_id: arrow.road_id,
-      direction: arrow.direction,
-      oneway: arrow.oneway,
-      coords: arrow.coords,
-      new_node_id: arrow.new_node_id,
-      new_lat: arrow.new_lat,
-      new_lon: arrow.new_lon,
-    };
+    // Capture initial state before any async ops
+    let currentArrow: RoadArrow | undefined = extendMode.modal.arrows?.find((a) => a.road_id === extendMode.modal!.selected_road_id);
+    if (!currentArrow) return;
 
-    // If this arrow triggers the special route-reversal (oneway + wrong direction
-    // on both-bidirectional routes), the server will flip endpoint_type at save time.
-    // Track the effective type here so subsequent arrows are filtered correctly.
-    const isSpecialReverse = !modal.has_oneway && !modal.has_sub_oneway && arrow.oneway && (
-      (modal.endpoint_type === 'end'   && arrow.direction === 'descend') ||
-      (modal.endpoint_type === 'start' && arrow.direction === 'ascend')
-    );
-    const newHasOneway = modal.has_oneway || arrow.oneway;
-    // has_sub_oneway doesn't change: bidirectional roads are added to the sub path
-    // during the session, never one-way roads.
-    const newHasSubOneway = modal.has_sub_oneway;
-    const newEndpointType: 'start' | 'end' = isSpecialReverse
-      ? (modal.endpoint_type === 'end' ? 'start' : 'end')
-      : modal.endpoint_type;
+    let currentModal = extendMode.modal;
+    let accumulatedPendingRoads = [...extendMode.pending_roads];
 
-    const newExcluded = [...modal.excluded_road_ids, arrow.road_id];
+    // Show loading state immediately
+    setExtendMode((prev) => prev ? { ...prev, modal: { ...prev.modal!, arrows: null, selected_road_id: null } } : null);
 
-    // Move modal to new position immediately with loading state
-    setExtendMode((prev) => ({
-      ...prev!,
-      pending_roads: [...prev!.pending_roads, newPending],
-      modal: {
-        ...prev!.modal!,
+    // ── Fast-forward loop: process one road per iteration ──────────────────────
+    while (true) {
+      const arrow: RoadArrow = currentArrow!;
+
+      const newPending: PendingRoadItem = {
+        road_id: arrow.road_id,
+        direction: arrow.direction,
+        oneway: arrow.oneway,
+        coords: arrow.coords,
+        new_node_id: arrow.new_node_id,
+        new_lat: arrow.new_lat,
+        new_lon: arrow.new_lon,
+      };
+
+      const isSpecialReverse = !currentModal.has_oneway && !currentModal.has_sub_oneway && arrow.oneway && (
+        (currentModal.endpoint_type === 'end'   && arrow.direction === 'descend') ||
+        (currentModal.endpoint_type === 'start' && arrow.direction === 'ascend')
+      );
+      const newHasOneway = currentModal.has_oneway || arrow.oneway;
+      const newHasSubOneway = currentModal.has_sub_oneway;
+      const newEndpointType: 'start' | 'end' = isSpecialReverse
+        ? (currentModal.endpoint_type === 'end' ? 'start' : 'end')
+        : currentModal.endpoint_type;
+      const newExcluded = [...currentModal.excluded_road_ids, arrow.road_id];
+
+      accumulatedPendingRoads = [...accumulatedPendingRoads, newPending];
+
+      // Fetch arrows at new node
+      const params = `nodeId=${arrow.new_node_id}&excludeRoadIds=${newExcluded.join(',')}`;
+      const res = await fetch(`/api/roads/at-node?${params}`);
+      const rawArrows: RoadArrow[] = await res.json();
+      const newArrows = filterValidArrows(rawArrows, newEndpointType, newHasOneway, newHasSubOneway);
+
+      // Update local modal state
+      currentModal = {
+        ...currentModal,
         endpoint_type: newEndpointType,
         has_oneway: newHasOneway,
         has_sub_oneway: newHasSubOneway,
         position: [arrow.new_lat, arrow.new_lon],
         node_id: arrow.new_node_id,
-        arrows: null,
-        selected_road_id: null,
         excluded_road_ids: newExcluded,
-      },
-    }));
+        arrows: newArrows,
+        selected_road_id: null,
+      };
 
-    const params = `nodeId=${arrow.new_node_id}&excludeRoadIds=${newExcluded.join(',')}`;
-    const res = await fetch(`/api/roads/at-node?${params}`);
-    const rawArrows: RoadArrow[] = await res.json();
-    const newArrows = filterValidArrows(rawArrows, newEndpointType, newHasOneway, newHasSubOneway);
+      // ── Fast-forward condition check ────────────────────────────────────────
+      if (fastForward && arrow.name !== '') {
+        // Condition 2: exactly one candidate with the same name
+        const sameNameCandidates = newArrows.filter((a) => a.name === arrow.name);
+        if (sameNameCandidates.length === 1) {
+          const candidate = sameNameCandidates[0];
+          // Condition 3: angle between candidate bearing and current arrow bearing < 90°
+          const diff = Math.abs(arrow.bearing - candidate.bearing);
+          const angle = Math.min(diff, 360 - diff);
+          if (angle < 90) {
+            // All conditions met → auto-select and continue loop
+            currentArrow = candidate;
+            continue;
+          }
+        }
+      }
 
-    setExtendMode((prev) => {
-      if (!prev?.modal) return prev;
+      // Fast-forward stops (or was never active) → apply normal single-arrow auto-select
       const autoSelect = newArrows.length === 1 ? newArrows[0].road_id : null;
-      return { ...prev, modal: { ...prev.modal, arrows: newArrows, selected_road_id: autoSelect } };
-    });
+      currentModal = { ...currentModal, selected_road_id: autoSelect };
+      break;
+    }
+
+    // ── Commit final state in one update ──────────────────────────────────────
+    setExtendMode((prev) => prev ? {
+      ...prev,
+      pending_roads: accumulatedPendingRoads,
+      modal: currentModal,
+      // Increment token to signal ExtendRouteOverlay to reset the FF checkbox
+      ...(fastForward && { fastForwardResetToken: (prev.fastForwardResetToken ?? 0) + 1 }),
+    } : null);
   };
 
   const handleSaveExtend = async (): Promise<void> => {

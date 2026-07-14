@@ -65,6 +65,8 @@ function ExtendModalDiv({
   modal,
   pixelPos,
   pendingCount,
+  fastForward,
+  onFastForwardChange,
   onArrowSelect,
   onForward,
   onSaveAndClose,
@@ -74,6 +76,8 @@ function ExtendModalDiv({
   modal: ExtendModalState;
   pixelPos: { x: number; y: number };
   pendingCount: number;
+  fastForward: boolean;
+  onFastForwardChange: (v: boolean) => void;
   onArrowSelect: (roadId: number) => void;
   onForward: () => void;
   onSaveAndClose: () => void;
@@ -132,6 +136,16 @@ function ExtendModalDiv({
         </svg>
       )}
 
+      {/* fast-forward checkbox */}
+      <label className="extend-modal-ff-label">
+        <input
+          type="checkbox"
+          checked={fastForward}
+          onChange={(e) => onFastForwardChange(e.target.checked)}
+        />
+        {' fast-forward mode'}
+      </label>
+
       {/* Buttons */}
       <div className="extend-modal-buttons">
         <button
@@ -164,7 +178,7 @@ export interface ExtendRouteOverlayProps {
   extendMode: ExtendModeState | null;
   onEndpointClick: (ep: EndpointInfo) => void;
   onArrowSelect: (roadId: number) => void;
-  onForward: () => void;
+  onForward: (fastForward: boolean) => void;
   onSaveAndClose: () => void;
   onCancelExtend: () => void;
 }
@@ -179,6 +193,17 @@ const ExtendRouteOverlay: React.FC<ExtendRouteOverlayProps> = ({
 }) => {
   const map = useMap();
   const [modalPixelPos, setModalPixelPos] = useState<{ x: number; y: number } | null>(null);
+  const [fastForward, setFastForward] = useState(false);
+
+  // Reset fast-forward checkbox when App.tsx increments the reset token
+  const prevResetToken = useRef(0);
+  useEffect(() => {
+    const token = extendMode?.fastForwardResetToken ?? 0;
+    if (token > prevResetToken.current) {
+      setFastForward(false);
+      prevResetToken.current = token;
+    }
+  }, [extendMode?.fastForwardResetToken]);
 
   // Keep a ref to the latest update function to avoid stale closures in event handlers
   const updateRef = useRef<() => void>(() => {});
@@ -241,8 +266,10 @@ const ExtendRouteOverlay: React.FC<ExtendRouteOverlayProps> = ({
           modal={extendMode.modal}
           pixelPos={modalPixelPos}
           pendingCount={extendMode.pending_roads.length}
+          fastForward={fastForward}
+          onFastForwardChange={setFastForward}
           onArrowSelect={onArrowSelect}
-          onForward={onForward}
+          onForward={() => onForward(fastForward)}
           onSaveAndClose={onSaveAndClose}
           onCancel={onCancelExtend}
           mapContainer={map.getContainer()}

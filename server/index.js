@@ -1133,10 +1133,12 @@ app.post('/api/routes/save', async (req, res) => {
       (p) => (p.roads || []).map((r) => Number(r.road_id))
     );
     const updatedGroups = await buildUpdatedIntersectionGroups(routesWithKeys, allRoadIds, {});
-    // Always persist intersection_groups (default to empty group when no intersections found)
+    // Build default intersection_groups: one empty entry per path (key = path index)
+    const defaultGroups = Object.fromEntries(routesWithKeys.map((_, i) => [String(i), []]));
+    // Merge: ensure all keys are present even when some paths have no intersections
     await osmDb.collection(ROUTES_COLLECTION).updateOne(
       { relation_id: result.relation_id },
-      { $set: { intersection_groups: updatedGroups ?? { '0': [] } } }
+      { $set: { intersection_groups: { ...defaultGroups, ...(updatedGroups || {}) } } }
     );
     res.json(result);
   } catch (err) {
@@ -1234,10 +1236,12 @@ app.post('/api/routes/from-scratch', async (req, res) => {
     // Add intersections for the selected road
     const routesWithKeys = applyIntersectionGroupKeys(routeData.routes);
     const updatedGroups = await buildUpdatedIntersectionGroups(routesWithKeys, [Number(road_id)], {});
-    // Always persist intersection_groups (default to empty group when no intersections found)
+    // Build default intersection_groups: one empty entry per path (key = path index)
+    const defaultGroups = Object.fromEntries(routesWithKeys.map((_, i) => [String(i), []]));
+    // Merge: ensure all keys are present even when some paths have no intersections
     await osmDb.collection(ROUTES_COLLECTION).updateOne(
       { relation_id: result.relation_id },
-      { $set: { intersection_groups: updatedGroups ?? { '0': [] } } }
+      { $set: { intersection_groups: { ...defaultGroups, ...(updatedGroups || {}) } } }
     );
     res.json(result);
   } catch (err) {

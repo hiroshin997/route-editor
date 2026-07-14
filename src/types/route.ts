@@ -189,4 +189,6 @@ export interface ExtendModeState {
   endpoints: EndpointInfo[];
   modal: ExtendModalState | null;
   pending_roads: PendingRoadItem[];
+  /** Incremented by App.tsx each time fast-forward stops; ExtendRouteOverlay watches to reset checkbox. */
+  fastForwardResetToken: number;
 }
