@@ -13,11 +13,11 @@ import {
 
 const endpointIcon = L.divIcon({
   className: 'endpoint-marker-icon',
-  html: `<svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 24 24" fill="#f97316" stroke="white" stroke-width="0.5">
+  html: `<svg xmlns="http://www.w3.org/2000/svg" width="60" height="60" viewBox="0 0 24 24" fill="#f97316" stroke="white" stroke-width="0.5">
     <path d="m12 2-4 4h3v3H8V6L4 10l4 4v-3h3v3H8l4 4 4-4h-3v-3h3v3l4-4-4-4v3h-3V9h3l-4-4z"/>
   </svg>`,
-  iconSize: [30, 30],
-  iconAnchor: [15, 15],
+  iconSize: [60, 60],
+  iconAnchor: [30, 30],
 });
 
 // ── SVG Arrow component ────────────────────────────────────────────────────────

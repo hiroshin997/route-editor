@@ -450,6 +450,28 @@ body,
   animation: fromScratchBlink 0.9s ease-in-out infinite;
 }
 
+/* ── "this road" highlight ───────────────────────────────────────────────── */
+@keyframes thisRoadBlink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.25; }
+}
+
+.this-road-line {
+  animation: thisRoadBlink 1s ease-in-out infinite;
+}
+
+.this-road-label {
+  color: #2563eb;
+  font-size: 12px;
+  font-weight: bold;
+  white-space: nowrap;
+  background: rgba(255, 255, 255, 0.85);
+  padding: 2px 6px;
+  border-radius: 3px;
+  border: 1px solid #93c5fd;
+  pointer-events: none;
+}
+
 /* ── Route panel trim button ─────────────────────────────────────────────── */
 .route-panel-trim-btn { color: #888; }
 .route-panel-trim-btn--active { color: #f97316 !important; }
