@@ -67,7 +67,7 @@ const MapContextMenu: React.FC = () => {
   const labelIcon = thisRoad
     ? L.divIcon({
         className: '',
-        html: `<div class="this-road-label">road_id: ${thisRoad.road_id}</div>`,
+        html: `<div class="this-road-label"><a href="https://www.openstreetmap.org/way/${thisRoad.road_id}" target="_blank" rel="noreferrer">road_id: ${thisRoad.road_id}</a></div>`,
         iconSize: [0, 0],
         iconAnchor: [0, 0],
       })
@@ -97,7 +97,7 @@ const MapContextMenu: React.FC = () => {
           onContextMenu={(e) => e.preventDefault()}
         >
           <div className="ctx-menu-item" onClick={handleThisRoad}>
-            this road
+            This road
           </div>
           <hr className="ctx-menu-divider" />
           <div
