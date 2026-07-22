@@ -2,9 +2,11 @@ import React, { useEffect, useRef } from 'react';
 import { MapContainer, TileLayer, GeoJSON, Polyline, Marker, Tooltip, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { RoutePolyline, EndpointInfo, ExtendModeState, TrimModeState, Intersection, FromScratchState, FromScratchRoad } from '../types/route';
+import { RoutePolyline, EndpointInfo, ExtendModeState, TrimModeState, SectorTrimModeState, LinkModeState, Intersection, FromScratchState, FromScratchRoad } from '../types/route';
 import ExtendRouteOverlay from './ExtendRouteOverlay';
 import TrimRouteOverlay from './TrimRouteOverlay';
+import SectorTrimOverlay from './SectorTrimOverlay';
+import RouteLinkOverlay, { RouteLinkOverlayProps } from './RouteLinkOverlay';
 import IntersectionOverlay, { IntersectionOverlayProps } from './IntersectionOverlay';
 import FromScratchOverlay from './FromScratchOverlay';
 import MapContextMenu from './MapContextMenu';
@@ -163,6 +165,7 @@ interface MapViewProps {
   selectedIndex: number | null;
   extendMode: ExtendModeState | null;
   trimMode: TrimModeState | null;
+  sectorTrimMode: SectorTrimModeState | null;
   /** Intersections to display (display mode or edit mode) */
   intersections: Intersection[];
   intersectionRoutePolyline: RoutePolyline | null;
@@ -177,6 +180,14 @@ interface MapViewProps {
   onCancelExtend: () => void;
   onTrimStart: () => void;
   onTrimEnd: () => void;
+  onSectorTrimStart: () => void;
+  onSectorTrimEnd: () => void;
+  linkMode: LinkModeState | null;
+  onLinkEndpointClick: RouteLinkOverlayProps['onEndpointClick'];
+  onLinkSelectCandidate: RouteLinkOverlayProps['onSelectCandidate'];
+  onConfirmLink: RouteLinkOverlayProps['onConfirmLink'];
+  onDismissLinkModal: RouteLinkOverlayProps['onDismissModal'];
+  onCancelLink: RouteLinkOverlayProps['onCancelLink'];
   onIntersectionAdd: IntersectionOverlayProps['onAdd'];
   onIntersectionDelete: IntersectionOverlayProps['onDelete'];
   onIntersectionRename: IntersectionOverlayProps['onRename'];
@@ -198,6 +209,7 @@ const MapView: React.FC<MapViewProps> = ({
   selectedIndex,
   extendMode,
   trimMode,
+  sectorTrimMode,
   onHoveredIndexChange,
   onSelectedIndexChange,
   onEndpointClick,
@@ -207,6 +219,14 @@ const MapView: React.FC<MapViewProps> = ({
   onCancelExtend,
   onTrimStart,
   onTrimEnd,
+  onSectorTrimStart,
+  onSectorTrimEnd,
+  linkMode,
+  onLinkEndpointClick,
+  onLinkSelectCandidate,
+  onConfirmLink,
+  onDismissLinkModal,
+  onCancelLink,
   intersections,
   intersectionRoutePolyline,
   isIntersectionEditMode,
@@ -229,6 +249,9 @@ const MapView: React.FC<MapViewProps> = ({
       return routePolylines.filter((rp) => rp.relation_id === extendMode.relation_id);
     }
     if (trimMode) {
+      return [];
+    }
+    if (sectorTrimMode) {
       return [];
     }
     return routePolylines;
@@ -311,6 +334,19 @@ const MapView: React.FC<MapViewProps> = ({
           trimMode={trimMode}
           onTrimStart={onTrimStart}
           onTrimEnd={onTrimEnd}
+        />
+        <SectorTrimOverlay
+          sectorTrimMode={sectorTrimMode}
+          onTrimStart={onSectorTrimStart}
+          onTrimEnd={onSectorTrimEnd}
+        />
+        <RouteLinkOverlay
+          linkMode={linkMode}
+          onEndpointClick={onLinkEndpointClick}
+          onSelectCandidate={onLinkSelectCandidate}
+          onConfirmLink={onConfirmLink}
+          onDismissModal={onDismissLinkModal}
+          onCancelLink={onCancelLink}
         />
         <IntersectionOverlay
           intersections={intersections}

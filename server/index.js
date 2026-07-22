@@ -560,7 +560,218 @@ app.put('/api/routes/:relation_id/trim', async (req, res) => {
   }
 });
 
+// ── Route link endpoints ──────────────────────────────────────────────────────
+
+/**
+ * POST /api/routes/:relation_id/find-linkable
+ * Body: { node_id, endpoint_type: 'start'|'end' }
+ * Returns candidate routes whose endpoint node matches, suitable for linking.
+ */
+app.post('/api/routes/:relation_id/find-linkable', async (req, res) => {
+  try {
+    const relation_id = parseInt(req.params.relation_id, 10);
+    const { node_id, endpoint_type } = req.body;
+    if (!node_id || !endpoint_type) return res.status(400).json({ error: 'node_id and endpoint_type required' });
+
+    const col = osmDb.collection(ROUTES_COLLECTION);
+    // Step 3.1: find all routes that contain this node_id anywhere in their road_sectors
+    const [byMin, byMax] = await Promise.all([
+      col.find({ 'routes.roads.road_sectors.min_node_id': node_id, is_deleted: { $ne: true } },
+               { projection: { relation_id: 1, names: 1, routes: 1, _id: 0 } }).toArray(),
+      col.find({ 'routes.roads.road_sectors.max_node_id': node_id, is_deleted: { $ne: true } },
+               { projection: { relation_id: 1, names: 1, routes: 1, _id: 0 } }).toArray(),
+    ]);
+
+    // Merge, deduplicate, exclude self
+    const seen = new Set();
+    const allDocs = [];
+    for (const doc of [...byMin, ...byMax]) {
+      if (doc.relation_id === relation_id) continue;
+      if (!seen.has(doc.relation_id)) { seen.add(doc.relation_id); allDocs.push(doc); }
+    }
+
+    // Steps 3.2 + 3.3: filter to routes whose endpoint node matches
+    const results = [];
+    for (const doc of allDocs) {
+      for (let pi = 0; pi < (doc.routes || []).length; pi++) {
+        const roads = doc.routes[pi]?.roads || [];
+        if (!roads.length) continue;
+
+        let matches = false;
+        if (endpoint_type === 'end') {
+          // Looking for a candidate whose START node == our END node_id
+          const s = roads[0]?.road_sectors?.[0];
+          if (s) {
+            const startNode = s.direction === 'ascend' ? s.min_node_id : s.max_node_id;
+            if (startNode === node_id) matches = true;
+          }
+        } else { // 'start'
+          // Looking for a candidate whose END node == our START node_id
+          const lastRoad = roads[roads.length - 1];
+          const lastSectors = lastRoad?.road_sectors || [];
+          const s = lastSectors[lastSectors.length - 1];
+          if (s) {
+            const endNode = s.direction === 'ascend' ? s.max_node_id : s.min_node_id;
+            if (endNode === node_id) matches = true;
+          }
+        }
+
+        if (matches) {
+          // Build display coords
+          const coords = [];
+          let prev = null;
+          for (const road of roads) {
+            for (const s of (road.road_sectors || [])) {
+              const [sLat, sLon, eLat, eLon] = s.direction === 'ascend'
+                ? [s.lat0, s.lon0, s.lat1, s.lon1]
+                : [s.lat1, s.lon1, s.lat0, s.lon0];
+              if (!prev || Math.abs(sLat - prev[0]) > 1e-7 || Math.abs(sLon - prev[1]) > 1e-7)
+                coords.push([sLat, sLon]);
+              coords.push([eLat, eLon]);
+              prev = [eLat, eLon];
+            }
+          }
+          results.push({ relation_id: doc.relation_id, name: getPrimaryRouteName(doc), path_idx: pi, coords });
+        }
+      }
+    }
+    res.json(results);
+  } catch (err) {
+    console.error('/api/routes/:id/find-linkable error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /api/routes/:relation_id/link
+ * Body: { path_idx, endpoint_type, candidate_relation_id, candidate_path_idx }
+ * Appends/prepends candidate path's roads to the original route's path.
+ */
+app.post('/api/routes/:relation_id/link', async (req, res) => {
+  try {
+    const relation_id = parseInt(req.params.relation_id, 10);
+    const { path_idx, endpoint_type, candidate_relation_id, candidate_path_idx } = req.body;
+
+    const col = osmDb.collection(ROUTES_COLLECTION);
+    const [origDoc, candDoc] = await Promise.all([
+      col.findOne({ relation_id }, { projection: { routes: 1, roads: 1, _id: 0 } }),
+      col.findOne({ relation_id: candidate_relation_id }, { projection: { routes: 1, _id: 0 } }),
+    ]);
+    if (!origDoc || !candDoc) return res.status(404).json({ error: 'Route not found' });
+
+    const origRoads = [...((origDoc.routes[path_idx]?.roads) || [])];
+    const candRoads = [...((candDoc.routes[candidate_path_idx]?.roads) || [])];
+    if (!origRoads.length || !candRoads.length) return res.status(400).json({ error: 'Empty roads' });
+
+    let newRoads;
+    if (endpoint_type === 'end') {
+      // Append candidate roads after original
+      const lastOrig = { ...origRoads[origRoads.length - 1] };
+      const firstCand = { ...candRoads[0] };
+      const d1 = lastOrig.road_sectors?.[0]?.direction;
+      if (d1 === 'ascend') lastOrig.max_side_road_id = firstCand.road_id;
+      else lastOrig.min_side_road_id = firstCand.road_id;
+      const d2 = firstCand.road_sectors?.[0]?.direction;
+      if (d2 === 'ascend') firstCand.min_side_road_id = lastOrig.road_id;
+      else firstCand.max_side_road_id = lastOrig.road_id;
+      origRoads[origRoads.length - 1] = lastOrig;
+      candRoads[0] = firstCand;
+      newRoads = [...origRoads, ...candRoads];
+    } else { // 'start'
+      // Prepend candidate roads before original
+      const firstOrig = { ...origRoads[0] };
+      const lastCand = { ...candRoads[candRoads.length - 1] };
+      const d1 = firstOrig.road_sectors?.[0]?.direction;
+      if (d1 === 'ascend') firstOrig.min_side_road_id = lastCand.road_id;
+      else firstOrig.max_side_road_id = lastCand.road_id;
+      const lastCandSectors = lastCand.road_sectors || [];
+      const d2 = lastCandSectors[lastCandSectors.length - 1]?.direction;
+      if (d2 === 'ascend') lastCand.max_side_road_id = firstOrig.road_id;
+      else lastCand.min_side_road_id = firstOrig.road_id;
+      origRoads[0] = firstOrig;
+      candRoads[candRoads.length - 1] = lastCand;
+      newRoads = [...candRoads, ...origRoads];
+    }
+
+    const newRoutes = origDoc.routes.map((p, i) => i === path_idx ? { ...p, roads: newRoads } : p);
+    const bbox = computeBboxFromPaths(newRoutes);
+
+    // Merge top-level roads[] with new road_ids from candidate
+    const existingIds = new Set((origDoc.roads || []).map(r => Number(r.road_id)));
+    const newTopRoads = [
+      ...(origDoc.roads || []),
+      ...candRoads.filter(r => !existingIds.has(Number(r.road_id))).map(r => ({ road_id: r.road_id, role: '' })),
+    ];
+
+    const pad = (n) => String(n).padStart(2, '0');
+    const jst = new Date(Date.now() + 9 * 3600 * 1000);
+    const updated_at = `${jst.getUTCFullYear()}-${pad(jst.getUTCMonth()+1)}-${pad(jst.getUTCDate())}T${pad(jst.getUTCHours())}:${pad(jst.getUTCMinutes())}:${pad(jst.getUTCSeconds())}+09:00`;
+
+    await col.updateOne({ relation_id }, { $set: { routes: newRoutes, roads: newTopRoads, bbox, updated_at } });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('/api/routes/:id/link error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Route extension endpoints ─────────────────────────────────────────────────
+
+/**
+ * PUT /api/routes/:relation_id/sector-trim
+ * Body: { path_idx, new_roads }
+ * Same as /trim but designed for road-sector–level changes.
+ * Replaces routes[path_idx].roads with new_roads, recomputes bbox, updates timestamps.
+ */
+app.put('/api/routes/:relation_id/sector-trim', async (req, res) => {
+  try {
+    const relation_id = parseInt(req.params.relation_id, 10);
+    const { path_idx, new_roads } = req.body;
+    if (!Array.isArray(new_roads) || new_roads.length === 0) {
+      return res.status(400).json({ error: 'new_roads array required' });
+    }
+
+    const col = osmDb.collection(ROUTES_COLLECTION);
+    const doc = await col.findOne({ relation_id }, { projection: { routes: 1, intersection_groups: 1, _id: 0 } });
+    if (!doc) return res.status(404).json({ error: 'Not found' });
+
+    // Enforce -1 on the path-endpoint side-road IDs
+    const updated = new_roads.map((r, i) => {
+      let road = { ...r };
+      if (i === 0) road = { ...road, min_side_road_id: -1 };
+      if (i === new_roads.length - 1) road = { ...road, max_side_road_id: -1 };
+      return road;
+    });
+
+    const routes = (doc.routes || []).map((p, i) => (i === path_idx ? { ...p, roads: updated } : p));
+    const bbox = computeBboxFromPaths(routes);
+
+    const pad = (n) => String(n).padStart(2, '0');
+    const jst = new Date(Date.now() + 9 * 3600 * 1000);
+    const updated_at = `${jst.getUTCFullYear()}-${pad(jst.getUTCMonth()+1)}-${pad(jst.getUTCDate())}T${pad(jst.getUTCHours())}:${pad(jst.getUTCMinutes())}:${pad(jst.getUTCSeconds())}+09:00`;
+
+    // Remove intersections whose road_id is no longer present in the trimmed path
+    const trimKey = doc.routes[path_idx]?.intersection_group_key;
+    const existingGroups = doc.intersection_groups || {};
+    const $set = { routes, bbox, updated_at };
+    if (trimKey && existingGroups[trimKey]) {
+      const validIds = new Set();
+      for (const path of routes) {
+        if (path.intersection_group_key === trimKey) {
+          for (const r of (path.roads || [])) validIds.add(Number(r.road_id));
+        }
+      }
+      const filtered = (existingGroups[trimKey] || []).filter((item) => validIds.has(Number(item.road_id)));
+      $set.intersection_groups = { ...existingGroups, [trimKey]: filtered };
+    }
+
+    await col.updateOne({ relation_id }, { $set });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('/api/routes/:id/sector-trim error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
 
 /**
  * GET /api/routes/:relation_id/endpoints

@@ -8,7 +8,7 @@ import NewRoutePanel from './components/NewRoutePanel';
 import NamesEditModal from './components/NamesEditModal';
 import TrimRoutePanel from './components/TrimRoutePanel';
 import IntersectionPanel from './components/IntersectionPanel';
-import { BBox, RouteDoc, RoutePolyline, EndpointInfo, RoadArrow, PendingRoadItem, ExtendModeState, TrimModeState, Intersection, IntersectionModeState, DisplayIntersectionState, FromScratchState } from './types/route';
+import { BBox, RouteDoc, RoutePolyline, EndpointInfo, RoadArrow, PendingRoadItem, ExtendModeState, TrimModeState, SectorTrimModeState, LinkModeState, LinkCandidate, Intersection, IntersectionModeState, DisplayIntersectionState, FromScratchState } from './types/route';
 import { computeBboxFromGeoJSON, computeRoutePolylines } from './utils/routeUtils';
 import { getNameVariations } from './utils/nameUtils';
 import './App.css';
@@ -73,13 +73,16 @@ function App() {
   const [routePolylines, setRoutePolylines] = useState<RoutePolyline[]>([]);
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
-  const [panelMode, setPanelMode] = useState<'routes' | 'newRoute' | 'trim' | 'intersection'>('routes');
+  const [panelMode, setPanelMode] = useState<'routes' | 'newRoute' | 'trim' | 'sectorTrim' | 'intersection'>('routes');
   const [previewRoutes, setPreviewRoutes] = useState<RoutePolyline[]>([]);
   const [cityBbox, setCityBbox] = useState<BBox | null>(saved?.cityBbox ?? null);
   const [editingRelationId, setEditingRelationId] = useState<number | null>(null);
   const [extendMode, setExtendMode] = useState<ExtendModeState | null>(null);
   const [trimMode, setTrimMode] = useState<TrimModeState | null>(null);
   const [isTrimSaving, setIsTrimSaving] = useState(false);
+  const [sectorTrimMode, setSectorTrimMode] = useState<SectorTrimModeState | null>(null);
+  const [isSectorTrimSaving, setIsSectorTrimSaving] = useState(false);
+  const [linkMode, setLinkMode] = useState<LinkModeState | null>(null);
   const [displayIntersections, setDisplayIntersections] = useState<DisplayIntersectionState | null>(null);
   const [intersectionMode, setIntersectionMode] = useState<IntersectionModeState | null>(null);
   const [isIntersectionSaving, setIsIntersectionSaving] = useState(false);
@@ -92,7 +95,7 @@ function App() {
 
   // Close newRoute / trim / intersection panel when zoom drops below 10
   useEffect(() => {
-    if (zoom < 10 && (panelMode === 'newRoute' || panelMode === 'trim' || panelMode === 'intersection')) {
+    if (zoom < 10 && (panelMode === 'newRoute' || panelMode === 'trim' || panelMode === 'sectorTrim' || panelMode === 'intersection')) {
       setPanelMode('routes');
       setPreviewRoutes([]);
       setTrimMode(null);
@@ -751,6 +754,171 @@ function App() {
     setPanelMode('routes');
   };
 
+  // ── Sector-level trim handlers ────────────────────────────────────────────────
+
+  const handleOpenSectorTrimMode = async (relation_id: number, path_idx: number): Promise<void> => {
+    const rp = routePolylines.find((p) => p.relation_id === relation_id && p.path_idx === path_idx);
+    if (rp) setSelectedIndex(rp.index);
+    try {
+      const res = await fetch(`/api/routes/${relation_id}/roads?path_idx=${path_idx}`);
+      const roads: any[] = await res.json();
+      setSectorTrimMode({ relation_id, path_idx, originalRoads: roads, currentRoads: roads });
+      setPanelMode('sectorTrim');
+    } catch (e) {
+      console.error('[App] failed to fetch road items for sector trim:', e);
+    }
+  };
+
+  const handleSectorTrimStart = (): void => {
+    setSectorTrimMode((prev) => {
+      if (!prev || !prev.currentRoads.length) return prev;
+      const firstRoad = prev.currentRoads[0];
+      const newSectors = (firstRoad.road_sectors || []).slice(1);
+      let newRoads;
+      if (newSectors.length === 0) {
+        newRoads = prev.currentRoads.slice(1);
+      } else {
+        newRoads = [{ ...firstRoad, road_sectors: newSectors }, ...prev.currentRoads.slice(1)];
+      }
+      return { ...prev, currentRoads: newRoads };
+    });
+  };
+
+  const handleSectorTrimEnd = (): void => {
+    setSectorTrimMode((prev) => {
+      if (!prev || !prev.currentRoads.length) return prev;
+      const lastRoad = prev.currentRoads[prev.currentRoads.length - 1];
+      const newSectors = (lastRoad.road_sectors || []).slice(0, -1);
+      let newRoads;
+      if (newSectors.length === 0) {
+        newRoads = prev.currentRoads.slice(0, -1);
+      } else {
+        newRoads = [...prev.currentRoads.slice(0, -1), { ...lastRoad, road_sectors: newSectors }];
+      }
+      return { ...prev, currentRoads: newRoads };
+    });
+  };
+
+  const handleSaveSectorTrim = async (): Promise<void> => {
+    if (!sectorTrimMode) return;
+    setIsSectorTrimSaving(true);
+    try {
+      const { relation_id, path_idx, currentRoads } = sectorTrimMode;
+      const res = await fetch(`/api/routes/${relation_id}/sector-trim`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path_idx, new_roads: currentRoads }),
+      });
+      if (res.ok) {
+        setSectorTrimMode(null);
+        setPanelMode('routes');
+        if (cityBboxRef.current) await fetchRoutes(cityBboxRef.current);
+      }
+    } catch (e) {
+      console.error('[App] sector trim save error:', e);
+    } finally {
+      setIsSectorTrimSaving(false);
+    }
+  };
+
+  const handleCancelSectorTrim = (): void => {
+    const isDirty = sectorTrimMode
+      ? JSON.stringify(sectorTrimMode.currentRoads) !== JSON.stringify(sectorTrimMode.originalRoads)
+      : false;
+    if (isDirty && !window.confirm('編集された内容は全て破棄されます。よろしいですか？')) return;
+    setSectorTrimMode(null);
+    setPanelMode('routes');
+  };
+
+  // ── Route link handlers ───────────────────────────────────────────────────────
+
+  const handleOpenLinkMode = async (relation_id: number, path_idx: number): Promise<void> => {
+    if (linkMode?.relation_id === relation_id && linkMode?.path_idx === path_idx) {
+      setLinkMode(null);
+      return;
+    }
+    const rp = routePolylines.find((p) => p.relation_id === relation_id && p.path_idx === path_idx);
+    if (rp) setSelectedIndex(rp.index);
+    try {
+      const res = await fetch(`/api/routes/${relation_id}/endpoints`);
+      const endpoints: EndpointInfo[] = await res.json();
+      const startEp = endpoints.find((e) => e.path_idx === path_idx && e.endpoint === 'start');
+      const endEp = endpoints.find((e) => e.path_idx === path_idx && e.endpoint === 'end');
+      if (!startEp || !endEp) return;
+      setLinkMode({
+        relation_id,
+        path_idx,
+        startPos: [startEp.lat, startEp.lon],
+        startNodeId: startEp.node_id,
+        endPos: [endEp.lat, endEp.lon],
+        endNodeId: endEp.node_id,
+        clickedEndpoint: null,
+        status: 'idle',
+        candidates: null,
+        selectedCandidateRelationId: null,
+      });
+    } catch (e) {
+      console.error('[App] failed to fetch endpoints for link:', e);
+    }
+  };
+
+  const handleLinkEndpointClick = async (endpoint: 'start' | 'end'): Promise<void> => {
+    if (!linkMode) return;
+    const { relation_id, path_idx } = linkMode;
+    const node_id = endpoint === 'start' ? linkMode.startNodeId : linkMode.endNodeId;
+    setLinkMode((prev) => prev
+      ? { ...prev, clickedEndpoint: endpoint, status: 'fetching', candidates: null, selectedCandidateRelationId: null }
+      : prev);
+    try {
+      const res = await fetch(`/api/routes/${relation_id}/find-linkable`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ node_id, endpoint_type: endpoint }),
+      });
+      const candidates: LinkCandidate[] = await res.json();
+      setLinkMode((prev) => (prev && prev.relation_id === relation_id && prev.path_idx === path_idx)
+        ? { ...prev, status: 'done', candidates }
+        : prev);
+    } catch (e) {
+      console.error('[App] find-linkable error:', e);
+      setLinkMode((prev) => prev ? { ...prev, status: 'done', candidates: [] } : prev);
+    }
+  };
+
+  const handleLinkSelectCandidate = (relation_id: number): void => {
+    setLinkMode((prev) => prev ? { ...prev, selectedCandidateRelationId: relation_id } : prev);
+  };
+
+  const handleResetLinkModal = (): void => {
+    setLinkMode((prev) => prev
+      ? { ...prev, clickedEndpoint: null, status: 'idle', candidates: null, selectedCandidateRelationId: null }
+      : prev);
+  };
+
+  const handleConfirmLink = async (): Promise<void> => {
+    if (!linkMode || !linkMode.clickedEndpoint || !linkMode.selectedCandidateRelationId) return;
+    const candidate = linkMode.candidates?.find((c) => c.relation_id === linkMode.selectedCandidateRelationId);
+    if (!candidate) return;
+    try {
+      const res = await fetch(`/api/routes/${linkMode.relation_id}/link`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          path_idx: linkMode.path_idx,
+          endpoint_type: linkMode.clickedEndpoint,
+          candidate_relation_id: candidate.relation_id,
+          candidate_path_idx: candidate.path_idx,
+        }),
+      });
+      if (res.ok) {
+        setLinkMode(null);
+        if (cityBboxRef.current) await fetchRoutes(cityBboxRef.current);
+      }
+    } catch (e) {
+      console.error('[App] link confirm error:', e);
+    }
+  };
+
   // ── Derived state ─────────────────────────────────────────────────────────────
 
   const nextLevel = selections.length + 1;
@@ -780,6 +948,7 @@ function App() {
           selectedIndex={selectedIndex}
           extendMode={extendMode}
           trimMode={trimMode}
+          sectorTrimMode={sectorTrimMode}
           intersections={intersectionMode?.currentIntersections ?? displayIntersections?.intersections ?? []}
           intersectionRoutePolyline={(() => {
             const rid = intersectionMode?.relation_id ?? displayIntersections?.relation_id;
@@ -801,6 +970,14 @@ function App() {
           onCancelExtend={handleCancelExtend}
           onTrimStart={handleTrimStart}
           onTrimEnd={handleTrimEnd}
+          onSectorTrimStart={handleSectorTrimStart}
+          onSectorTrimEnd={handleSectorTrimEnd}
+          linkMode={linkMode}
+          onLinkEndpointClick={handleLinkEndpointClick}
+          onLinkSelectCandidate={handleLinkSelectCandidate}
+          onConfirmLink={handleConfirmLink}
+          onDismissLinkModal={handleResetLinkModal}
+          onCancelLink={handleResetLinkModal}
           onIntersectionAdd={handleIntersectionAdd}
           onIntersectionDelete={handleIntersectionDelete}
           onIntersectionRename={handleIntersectionRename}
@@ -826,6 +1003,10 @@ function App() {
             extendingRelationId={extendMode?.relation_id}
             onTrimRoute={handleOpenTrimMode}
             trimmingRelationId={trimMode?.relation_id}
+            onSectorTrimRoute={handleOpenSectorTrimMode}
+            sectorTrimmingRelationId={sectorTrimMode?.relation_id}
+            onLinkRoute={handleOpenLinkMode}
+            linkingRelationId={linkMode?.relation_id}
             onIntersectionRoute={handleOpenIntersectionMode}
             intersectionRelationId={intersectionMode?.relation_id}
           />
@@ -836,6 +1017,15 @@ function App() {
             onSave={handleSaveTrim}
             onCancel={handleCancelTrim}
             onClose={handleCancelTrim}
+          />
+        ) : panelMode === 'sectorTrim' ? (
+          <TrimRoutePanel
+            isDirty={!!(sectorTrimMode &&
+              JSON.stringify(sectorTrimMode.currentRoads) !== JSON.stringify(sectorTrimMode.originalRoads))}
+            isSaving={isSectorTrimSaving}
+            onSave={handleSaveSectorTrim}
+            onCancel={handleCancelSectorTrim}
+            onClose={handleCancelSectorTrim}
           />
         ) : panelMode === 'intersection' ? (
           <IntersectionPanel

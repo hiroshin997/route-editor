@@ -2,6 +2,7 @@ import React from 'react';
 import EditIcon from '@mui/icons-material/Edit';
 import OpenWithIcon from '@mui/icons-material/OpenWith';
 import ContentCutIcon from '@mui/icons-material/ContentCut';
+import LinkIcon from '@mui/icons-material/Link';
 import TrafficIcon from '@mui/icons-material/Traffic';
 import { RoutePolyline } from '../types/route';
 
@@ -18,6 +19,10 @@ interface RoutePanelProps {
   extendingRelationId?: number;
   onTrimRoute: (relation_id: number, path_idx: number) => void;
   trimmingRelationId?: number;
+  onSectorTrimRoute: (relation_id: number, path_idx: number) => void;
+  sectorTrimmingRelationId?: number;
+  onLinkRoute: (relation_id: number, path_idx: number) => void;
+  linkingRelationId?: number;
   onIntersectionRoute: (relation_id: number, path_idx: number) => void;
   intersectionRelationId?: number;
 }
@@ -35,6 +40,10 @@ const RoutePanel: React.FC<RoutePanelProps> = ({
   extendingRelationId,
   onTrimRoute,
   trimmingRelationId,
+  onSectorTrimRoute,
+  sectorTrimmingRelationId,
+  onLinkRoute,
+  linkingRelationId,
   onIntersectionRoute,
   intersectionRelationId,
 }) => {
@@ -87,6 +96,20 @@ const RoutePanel: React.FC<RoutePanelProps> = ({
                     onClick={(e) => { e.stopPropagation(); onTrimRoute(rp.relation_id!, rp.path_idx ?? 0); }}
                   >
                     <ContentCutIcon fontSize="small" />
+                  </button>
+                  <button
+                    className={`route-panel-edit-btn route-panel-sector-trim-btn${sectorTrimmingRelationId === rp.relation_id ? ' route-panel-sector-trim-btn--active' : ''}`}
+                    title="経路を sector 単位で剪定"
+                    onClick={(e) => { e.stopPropagation(); onSectorTrimRoute(rp.relation_id!, rp.path_idx ?? 0); }}
+                  >
+                    <ContentCutIcon sx={{ fontSize: 15 }} />
+                  </button>
+                  <button
+                    className={`route-panel-edit-btn route-panel-link-btn${linkingRelationId === rp.relation_id ? ' route-panel-link-btn--active' : ''}`}
+                    title="ルートを接続"
+                    onClick={(e) => { e.stopPropagation(); onLinkRoute(rp.relation_id!, rp.path_idx ?? 0); }}
+                  >
+                    <LinkIcon fontSize="small" />
                   </button>
                   <button
                     className={`route-panel-edit-btn route-panel-intersection-btn${intersectionRelationId === rp.relation_id ? ' route-panel-intersection-btn--active' : ''}`}

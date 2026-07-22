@@ -122,6 +122,14 @@ export interface TrimModeState {
   trimmedFromEnd: any[];    // removed from back  (gray display)
 }
 
+/** Road-sector–level trim (finer granularity than road-level trim). */
+export interface SectorTrimModeState {
+  relation_id: number;
+  path_idx: number;       // always 0 (routes[0])
+  originalRoads: any[];   // unchanged – for isDirty check
+  currentRoads: any[];    // working copy (road_sectors removed)
+}
+
 export interface EndpointInfo {
   path_idx: number;
   endpoint: 'start' | 'end';
@@ -191,4 +199,29 @@ export interface ExtendModeState {
   pending_roads: PendingRoadItem[];
   /** Incremented by App.tsx each time fast-forward stops; ExtendRouteOverlay watches to reset checkbox. */
   fastForwardResetToken: number;
+}
+
+// ── Route link types ──────────────────────────────────────────────────────────
+
+export interface LinkCandidate {
+  relation_id: number;
+  name: string;
+  path_idx: number;
+  /** [lat, lon] pairs for displaying the candidate polyline */
+  coords: [number, number][];
+}
+
+export interface LinkModeState {
+  relation_id: number;
+  path_idx: number;
+  startPos: [number, number];   // [lat, lon] of path start endpoint
+  startNodeId: number;
+  endPos: [number, number];     // [lat, lon] of path end endpoint
+  endNodeId: number;
+  /** Which endpoint the user clicked (triggers candidate search) */
+  clickedEndpoint: 'start' | 'end' | null;
+  /** 'idle'=markers shown | 'fetching'=loading | 'done'=modal shown */
+  status: 'idle' | 'fetching' | 'done';
+  candidates: LinkCandidate[] | null;
+  selectedCandidateRelationId: number | null;
 }
