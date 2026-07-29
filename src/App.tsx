@@ -614,7 +614,7 @@ function App() {
     console.log('[handleIntersectionAdd] snap=', snap, 'names=', names);
     setIntersectionMode((prev) => {
       if (!prev) { console.log('[handleIntersectionAdd] intersectionMode is null!'); return prev; }
-      const newItem: Intersection = { intersection_id: prev.nextId, names, ...snap };
+      const newItem: Intersection = { intersection_id: prev.nextId, names, ...snap, "highway_tag": null };
       console.log('[handleIntersectionAdd] adding', newItem, 'total will be', prev.currentIntersections.length + 1);
       return { ...prev, currentIntersections: [...prev.currentIntersections, newItem], nextId: prev.nextId + 1 };
     });

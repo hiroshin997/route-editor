@@ -286,8 +286,8 @@ const IntersectionOverlay: React.FC<IntersectionOverlayProps> = ({
                   この交差点を削除します。よろしいですか？
                 </p>
                 <div className="intersection-dialog-buttons">
-                  <button className="intersection-dialog-ok" onClick={handleDialogOk}>ok</button>
-                  <button className="intersection-dialog-cancel" onClick={handleDialogCancel}>cancel</button>
+                  <button className="intersection-dialog-ok" onClick={handleDialogOk}>OK</button>
+                  <button className="intersection-dialog-cancel" onClick={handleDialogCancel}>Cancel</button>
                 </div>
               </>
             ) : dialog.type === 'rename' ? (
@@ -326,7 +326,7 @@ const IntersectionOverlay: React.FC<IntersectionOverlayProps> = ({
                     disabled={renameEntries.every((s) => !s.trim())}
                     onClick={handleDialogOk}
                   >ok</button>
-                  <button className="intersection-dialog-cancel" onClick={handleDialogCancel}>cancel</button>
+                  <button className="intersection-dialog-cancel" onClick={handleDialogCancel}>Cancel</button>
                 </div>
               </>
             ) : (
@@ -342,8 +342,8 @@ const IntersectionOverlay: React.FC<IntersectionOverlayProps> = ({
                   placeholder="交差点名"
                 />
                 <div className="intersection-dialog-buttons">
-                  <button className="intersection-dialog-ok" onClick={handleDialogOk}>ok</button>
-                  <button className="intersection-dialog-cancel" onClick={handleDialogCancel}>cancel</button>
+                  <button className="intersection-dialog-ok" onClick={handleDialogOk}>OK</button>
+                  <button className="intersection-dialog-cancel" onClick={handleDialogCancel}>Cancel</button>
                 </div>
               </>
             )}

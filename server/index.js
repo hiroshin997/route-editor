@@ -191,6 +191,7 @@ function buildIntersectionGroup(intersectionDocs, roadIds, usedNames = []) {
         coord_index:     pick.coord_index,
         lat:             pick.lat,
         lon:             pick.lon,
+        highway_tag:     pick.highway_tag,
       });
     }
   }

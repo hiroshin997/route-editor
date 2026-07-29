@@ -1,10 +1,15 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import EditIcon from '@mui/icons-material/Edit';
 import OpenWithIcon from '@mui/icons-material/OpenWith';
 import ContentCutIcon from '@mui/icons-material/ContentCut';
 import LinkIcon from '@mui/icons-material/Link';
 import TrafficIcon from '@mui/icons-material/Traffic';
 import { RoutePolyline } from '../types/route';
+
+// route-panel は表示切り替えで unmount されるため、スクロール位置はモジュールスコープで保持する。
+// onScroll で常時更新しておき、unmount時に scrollTop を読み直さない
+// (Firefox は要素が DOM から外れると scrollTop が 0 にリセットされるため)。
+let savedScrollTop = 0;
 
 interface RoutePanelProps {
   routePolylines: RoutePolyline[];
@@ -48,8 +53,22 @@ const RoutePanel: React.FC<RoutePanelProps> = ({
   intersectionRelationId,
 }) => {
   const newRouteEnabled = citySelected && zoom >= 10;
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = savedScrollTop;
+    }
+  }, []);
+
   return (
-    <div className="route-panel">
+    <div
+      className="route-panel"
+      ref={scrollRef}
+      onScroll={(e) => {
+        savedScrollTop = e.currentTarget.scrollTop;
+      }}
+    >
       <button
         className="new-route-open-btn"
         disabled={!newRouteEnabled}

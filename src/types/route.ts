@@ -50,6 +50,7 @@ export interface Intersection {
   coord_index: number;
   lat: number;
   lon: number;
+  highway_tag: string | null;
 }
 
 export interface IntersectionModeState {
