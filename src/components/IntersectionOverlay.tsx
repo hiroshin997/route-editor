@@ -60,6 +60,15 @@ function createIntersectionIcon(names: string[]): L.DivIcon {
   });
 }
 
+// ── highway_tag options ────────────────────────────────────────────────────────
+
+const HIGHWAY_TAG_OPTIONS: { value: string; label: string }[] = [
+  { value: '', label: '<blank>' },
+  { value: 'traffic_signals', label: 'traffic_signals' },
+  { value: 'motorway_junction', label: 'motorway_junction' },
+  { value: 'man-made structure', label: 'man-made structure' },
+];
+
 // ── Context menu and dialog types ─────────────────────────────────────────────
 
 type CtxMenu =
@@ -80,9 +89,9 @@ export interface IntersectionOverlayProps {
   routePolyline: RoutePolyline | null;
   isEditMode: boolean;
   roadItems: any[];
-  onAdd: (snap: { road_id: number; coord_index: number; lat: number; lon: number }, names: string[]) => void;
+  onAdd: (snap: { road_id: number; coord_index: number; lat: number; lon: number }, names: string[], highway_tag: string | null) => void;
   onDelete: (id: number) => void;
-  onRename: (id: number, names: string[]) => void;
+  onRename: (id: number, names: string[], highway_tag: string | null) => void;
   onMove: (id: number, snap: { road_id: number; coord_index: number; lat: number; lon: number }) => void;
 }
 
@@ -102,6 +111,7 @@ const IntersectionOverlay: React.FC<IntersectionOverlayProps> = ({
   const [nameInput, setNameInput] = useState('');
   // entries for rename dialog: list of name strings
   const [renameEntries, setRenameEntries] = useState<string[]>([]);
+  const [highwayTagInput, setHighwayTagInput] = useState('');
   const nameInputRef = useRef<HTMLInputElement>(null);
 
   console.log('[IntersectionOverlay] render: intersections=', intersections.length, 'isEditMode=', isEditMode);
@@ -117,6 +127,7 @@ const IntersectionOverlay: React.FC<IntersectionOverlayProps> = ({
   const openDialog = useCallback((d: Dialog, initialName = '') => {
     setDialog(d);
     setNameInput(initialName);
+    setHighwayTagInput('');
     setTimeout(() => nameInputRef.current?.focus(), 50);
   }, []);
 
@@ -169,6 +180,7 @@ const IntersectionOverlay: React.FC<IntersectionOverlayProps> = ({
     const inter = ctxMenu.intersection;
     setCtxMenu(null);
     setRenameEntries(inter.names.length > 0 ? [...inter.names] : ['']);
+    setHighwayTagInput(inter.highway_tag ?? '');
     setDialog({ type: 'rename', intersection: inter });
   };
 
@@ -185,22 +197,24 @@ const IntersectionOverlay: React.FC<IntersectionOverlayProps> = ({
     console.log('[handleDialogOk] called, dialog=', dialog, 'nameInput=', nameInput);
     if (!dialog) return;
     if (dialog.type === 'add-name') {
-      onAdd(dialog.snapResult, getNameVariations(nameInput));
+      onAdd(dialog.snapResult, getNameVariations(nameInput), highwayTagInput || null);
     } else if (dialog.type === 'rename') {
       const clean = renameEntries.filter((s) => s.trim());
-      if (clean.length > 0) onRename(dialog.intersection.intersection_id, clean);
+      if (clean.length > 0) onRename(dialog.intersection.intersection_id, clean, highwayTagInput || null);
     } else if (dialog.type === 'delete') {
       onDelete(dialog.intersection.intersection_id);
     }
     setDialog(null);
     setNameInput('');
     setRenameEntries([]);
+    setHighwayTagInput('');
   };
 
   const handleDialogCancel = () => {
     setDialog(null);
     setNameInput('');
     setRenameEntries([]);
+    setHighwayTagInput('');
   };
 
   const mapContainer = map.getContainer();
@@ -320,6 +334,15 @@ const IntersectionOverlay: React.FC<IntersectionOverlayProps> = ({
                 >
                   + new name
                 </button>
+                <select
+                  className="intersection-dialog-select"
+                  value={highwayTagInput}
+                  onChange={(e) => setHighwayTagInput(e.target.value)}
+                >
+                  {HIGHWAY_TAG_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
                 <div className="intersection-dialog-buttons">
                   <button
                     className="intersection-dialog-ok"
@@ -341,6 +364,15 @@ const IntersectionOverlay: React.FC<IntersectionOverlayProps> = ({
                   onKeyDown={(e) => e.key === 'Enter' && handleDialogOk()}
                   placeholder="交差点名"
                 />
+                <select
+                  className="intersection-dialog-select"
+                  value={highwayTagInput}
+                  onChange={(e) => setHighwayTagInput(e.target.value)}
+                >
+                  {HIGHWAY_TAG_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
                 <div className="intersection-dialog-buttons">
                   <button className="intersection-dialog-ok" onClick={handleDialogOk}>OK</button>
                   <button className="intersection-dialog-cancel" onClick={handleDialogCancel}>Cancel</button>

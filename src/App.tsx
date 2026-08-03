@@ -610,11 +610,12 @@ function App() {
   const handleIntersectionAdd = (
     snap: { road_id: number; coord_index: number; lat: number; lon: number },
     names: string[],
+    highway_tag: string | null,
   ): void => {
-    console.log('[handleIntersectionAdd] snap=', snap, 'names=', names);
+    console.log('[handleIntersectionAdd] snap=', snap, 'names=', names, 'highway_tag=', highway_tag);
     setIntersectionMode((prev) => {
       if (!prev) { console.log('[handleIntersectionAdd] intersectionMode is null!'); return prev; }
-      const newItem: Intersection = { intersection_id: prev.nextId, names, ...snap, "highway_tag": null };
+      const newItem: Intersection = { intersection_id: prev.nextId, names, ...snap, highway_tag };
       console.log('[handleIntersectionAdd] adding', newItem, 'total will be', prev.currentIntersections.length + 1);
       return { ...prev, currentIntersections: [...prev.currentIntersections, newItem], nextId: prev.nextId + 1 };
     });
@@ -627,11 +628,11 @@ function App() {
     });
   };
 
-  const handleIntersectionRename = (id: number, names: string[]): void => {
+  const handleIntersectionRename = (id: number, names: string[], highway_tag: string | null): void => {
     setIntersectionMode((prev) => {
       if (!prev) return prev;
       return { ...prev, currentIntersections: prev.currentIntersections.map((i) =>
-        i.intersection_id === id ? { ...i, names } : i) };
+        i.intersection_id === id ? { ...i, names, highway_tag } : i) };
     });
   };
 

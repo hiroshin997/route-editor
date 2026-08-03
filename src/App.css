@@ -591,6 +591,10 @@ body,
   width: 100%; padding: 6px 8px; border: 1px solid #ccc;
   border-radius: 4px; font-size: 13px; box-sizing: border-box; margin-bottom: 12px;
 }
+.intersection-dialog-select {
+  width: 100%; padding: 6px 8px; border: 1px solid #ccc;
+  border-radius: 4px; font-size: 13px; box-sizing: border-box; margin-bottom: 12px;
+}
 .intersection-dialog-buttons { display: flex; gap: 8px; justify-content: flex-end; }
 .intersection-dialog-ok {
   padding: 5px 16px; background: #0f766e; color: #fff;
