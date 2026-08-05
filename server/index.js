@@ -48,7 +48,7 @@ function buildOptionsQuery(level, parents) {
   } else if (level === 3) {
     return { 'properties.admin_level': { $gte: 8 }, $and: andConditions };
   } else {
-    return { 'properties.admin_level': 10, $and: andConditions };
+    return { $and: andConditions };
   }
 }
 

@@ -34,18 +34,8 @@ body,
 }
 
 .location-select {
-  padding: 4px 24px 4px 8px;
-  border: 1px solid #b0b0b0;
-  border-radius: 4px;
-  background: #fff;
-  cursor: pointer;
+  width: 220px;
   font-size: 14px;
-  appearance: auto;
-}
-
-.location-select:focus {
-  outline: 2px solid #0f766e;
-  outline-offset: 1px;
 }
 
 .location-separator {
