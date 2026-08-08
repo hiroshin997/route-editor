@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import Cookies from 'js-cookie';
 import LocationControl from './components/LocationControl';
 import ZoomButtons from './components/ZoomButtons';
@@ -11,6 +12,7 @@ import IntersectionPanel from './components/IntersectionPanel';
 import { BBox, RouteDoc, RoutePolyline, EndpointInfo, RoadArrow, PendingRoadItem, ExtendModeState, TrimModeState, SectorTrimModeState, LinkModeState, LinkCandidate, Intersection, IntersectionModeState, DisplayIntersectionState, FromScratchState } from './types/route';
 import { computeBboxFromGeoJSON, computeRoutePolylines } from './utils/routeUtils';
 import { getNameVariations } from './utils/nameUtils';
+import { buildAddressPath, parseAddressPath } from './utils/addressPath';
 import './App.css';
 
 const DEFAULT_CENTER: [number, number] = [36.2048, 138.2529];
@@ -62,6 +64,8 @@ function filterValidArrows(
 }
 
 function App() {
+  const location = useLocation();
+  const navigate = useNavigate();
   const savedRef = useRef<SavedState | null>(readCookieState());
   const saved = savedRef.current;
 
@@ -168,23 +172,76 @@ function App() {
 
   useEffect(() => {
     const init = async () => {
-      await fetchOptions(1, []);
+      const level1Data = await fetchOptions(1, []);
+      const urlSegments = parseAddressPath(location.pathname);
 
-      const restoredSelections = savedRef.current?.selections ?? [];
-      if (restoredSelections.length === 0) return;
+      if (urlSegments !== null) {
+        // URL-driven: walk the path segments, validating each against the
+        // real options for its level. Stop at the first segment that has no
+        // matching option — everything from there stays unselected.
+        const matched: string[] = [];
+        let levelData = level1Data;
+        for (let i = 0; i < urlSegments.length; i++) {
+          const level = i + 1;
+          if (level > 1) {
+            levelData = await fetchOptions(level, matched);
+          }
+          const found = levelData.some((d) => d.name === urlSegments[i]);
+          if (!found) break;
+          matched.push(urlSegments[i]);
+        }
 
-      for (let i = 2; i <= restoredSelections.length + 1; i++) {
-        const data = await fetchOptions(i, restoredSelections.slice(0, i - 1));
-        if (data.length === 0) break;
+        setSelections(matched);
+
+        if (matched.length > 0) {
+          const geoData = await fetchPolygon(matched);
+          if (matched.length >= 2 && geoData) {
+            const bbox = computeBboxFromGeoJSON(geoData);
+            if (bbox) {
+              cityBboxRef.current = bbox;
+              setCityBbox(bbox);
+              await fetchRoutes(bbox);
+            }
+          }
+        }
+
+        writeCookieState({
+          selections: matched,
+          zoom: latestRef.current.zoom,
+          mapCenter: latestRef.current.mapCenter,
+          cityBbox: matched.length <= 2 ? undefined : cityBboxRef.current ?? undefined,
+        });
+
+        // If some trailing segments didn't match, correct the URL to what was actually selected
+        const canonicalPath = buildAddressPath(matched);
+        if (canonicalPath !== location.pathname) {
+          navigate(canonicalPath, { replace: true });
+        }
+        return;
       }
 
-      await fetchPolygon(restoredSelections);
+      // Not an /address/... URL: fall back to restoring from the cookie
+      const restoredSelections = savedRef.current?.selections ?? [];
+      if (restoredSelections.length > 0) {
+        for (let i = 2; i <= restoredSelections.length + 1; i++) {
+          const data = await fetchOptions(i, restoredSelections.slice(0, i - 1));
+          if (data.length === 0) break;
+        }
 
-      // Restore routes using the stored city bbox
-      const savedBbox = savedRef.current?.cityBbox;
-      if (restoredSelections.length >= 2 && savedBbox) {
-        cityBboxRef.current = savedBbox;
-        await fetchRoutes(savedBbox);
+        await fetchPolygon(restoredSelections);
+
+        // Restore routes using the stored city bbox
+        const savedBbox = savedRef.current?.cityBbox;
+        if (restoredSelections.length >= 2 && savedBbox) {
+          cityBboxRef.current = savedBbox;
+          await fetchRoutes(savedBbox);
+        }
+      }
+
+      // Keep the URL in sync with the restored selection
+      const canonicalPath = buildAddressPath(restoredSelections);
+      if (canonicalPath !== location.pathname) {
+        navigate(canonicalPath, { replace: true });
       }
     };
 
@@ -193,6 +250,20 @@ function App() {
   }, []);
 
   // ── Event handlers ────────────────────────────────────────────────────────────
+
+  /** Persists the selection to the cookie and keeps the /address/... URL in sync. */
+  const persistSelections = (sel: string[], cityBboxForCookie: BBox | undefined): void => {
+    writeCookieState({
+      selections: sel,
+      zoom: latestRef.current.zoom,
+      mapCenter: latestRef.current.mapCenter,
+      cityBbox: cityBboxForCookie,
+    });
+    const target = buildAddressPath(sel);
+    if (target !== location.pathname) {
+      navigate(target);
+    }
+  };
 
   const handleSelect = async (level: number, name: string): Promise<void> => {
     const newSelections = name
@@ -231,12 +302,7 @@ function App() {
         cityBboxRef.current = null;
       }
 
-      writeCookieState({
-        selections: newSelections,
-        zoom: latestRef.current.zoom,
-        mapCenter: latestRef.current.mapCenter,
-        cityBbox: level <= 2 ? undefined : cityBboxRef.current ?? undefined,
-      });
+      persistSelections(newSelections, level <= 2 ? undefined : cityBboxRef.current ?? undefined);
       return;
     }
 
@@ -252,12 +318,7 @@ function App() {
       setTrimMode(null);
       setIntersectionMode(null);
       setDisplayIntersections(null);
-      writeCookieState({
-        selections: newSelections,
-        zoom: latestRef.current.zoom,
-        mapCenter: latestRef.current.mapCenter,
-        cityBbox: undefined,
-      });
+      persistSelections(newSelections, undefined);
     } else if (level === 2 && geoData) {
       // City selected → compute bbox and fetch routes
       const bbox = computeBboxFromGeoJSON(geoData);
@@ -271,21 +332,11 @@ function App() {
         setIntersectionMode(null);
         setDisplayIntersections(null);
         await fetchRoutes(bbox);
-        writeCookieState({
-          selections: newSelections,
-          zoom: latestRef.current.zoom,
-          mapCenter: latestRef.current.mapCenter,
-          cityBbox: bbox,
-        });
+        persistSelections(newSelections, bbox);
       }
     } else {
-      // Level 3+: routes unchanged, just update cookie
-      writeCookieState({
-        selections: newSelections,
-        zoom: latestRef.current.zoom,
-        mapCenter: latestRef.current.mapCenter,
-        cityBbox: cityBboxRef.current ?? undefined,
-      });
+      // Level 3+: routes unchanged, just update cookie and URL
+      persistSelections(newSelections, cityBboxRef.current ?? undefined);
     }
   };
 
