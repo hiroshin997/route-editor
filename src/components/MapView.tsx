@@ -91,7 +91,9 @@ interface MapControllerProps {
 /**
  * Inner component that accesses the Leaflet map instance.
  * Synchronises zoom from parent and reports user-driven zoom/move back up.
- * When polygon changes, pans map to polygon center without changing zoom.
+ * When polygon changes, smoothly flies to the polygon bounds at the
+ * highest zoom level that keeps the bbox within 80% of the viewport
+ * (10% padding on each side, both axes).
  */
 const MapController: React.FC<MapControllerProps> = ({
   zoom,
@@ -111,11 +113,12 @@ const MapController: React.FC<MapControllerProps> = ({
     prevZoomRef.current = zoom;
   }, [zoom, map]);
 
-  // When the polygon changes, pan to its center without altering zoom.
+  // When the polygon changes, fly to its bounds so the bbox fills 80% of the
+  // viewport (10% padding per side) at the highest zoom level that fits.
   useEffect(() => {
-    console.log('[MapController] pan effect triggered / polygonKey:', polygonKey, '/ polygon:', polygon);
+    console.log('[MapController] flyToBounds effect triggered / polygonKey:', polygonKey, '/ polygon:', polygon);
     if (!polygon) {
-      console.log('[MapController] polygon is null, skipping panTo');
+      console.log('[MapController] polygon is null, skipping flyToBounds');
       return;
     }
     try {
@@ -123,16 +126,17 @@ const MapController: React.FC<MapControllerProps> = ({
       const bounds = layer.getBounds();
       console.log('[MapController] bounds valid:', bounds.isValid(), '/ bounds:', bounds.isValid() ? bounds.toBBoxString() : 'N/A');
       if (bounds.isValid()) {
-        const center = bounds.getCenter();
-        console.log('[MapController] panTo center:', center.lat, center.lng);
-        map.panTo(center, { animate: true });
+        const size = map.getSize();
+        const padding: [number, number] = [size.x * 0.1, size.y * 0.1];
+        console.log('[MapController] flyToBounds padding:', padding);
+        map.flyToBounds(bounds, { padding, duration: 1 });
       }
     } catch (e) {
       console.error('[MapController] geoJSON parse error:', e);
     }
   // Depend on both polygonKey and polygon:
   // - polygonKey changes first (selection change), polygon is still null → skip
-  // - polygon then changes from null to data → this effect fires and pans
+  // - polygon then changes from null to data → this effect fires and flies
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [polygonKey, polygon, map]);
 
