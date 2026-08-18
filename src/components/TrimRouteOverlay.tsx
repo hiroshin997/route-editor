@@ -42,6 +42,35 @@ function getRoadMidpoint(roadItem: any): [number, number] {
   return coords[Math.floor(coords.length / 2)];
 }
 
+function closestDistToSegment(
+  pLat: number, pLon: number,
+  aLat: number, aLon: number,
+  bLat: number, bLon: number,
+): number {
+  const dx = bLon - aLon, dy = bLat - aLat;
+  const lenSq = dx * dx + dy * dy;
+  if (lenSq < 1e-14) return Math.hypot(pLat - aLat, pLon - aLon);
+  const t = Math.max(0, Math.min(1, ((pLon - aLon) * dx + (pLat - aLat) * dy) / lenSq));
+  const cLat = aLat + t * dy, cLon = aLon + t * dx;
+  return Math.hypot(pLat - cLat, pLon - cLon);
+}
+
+/** Find which road in `roads` the point (lat, lon) is closest to. */
+function findClosestRoadIndex(lat: number, lon: number, roads: any[]): number {
+  let minDist = Infinity;
+  let idx = 0;
+  roads.forEach((road, i) => {
+    for (const s of (road.road_sectors || [])) {
+      const dist = closestDistToSegment(lat, lon, s.lat0, s.lon0, s.lat1, s.lon1);
+      if (dist < minDist) {
+        minDist = dist;
+        idx = i;
+      }
+    }
+  });
+  return idx;
+}
+
 function buildAllRoadsCoords(roads: any[]): [number, number][] {
   const all: [number, number][] = [];
   let prevLat = NaN, prevLon = NaN;
@@ -58,8 +87,8 @@ function buildAllRoadsCoords(roads: any[]): [number, number][] {
 
 interface TrimRouteOverlayProps {
   trimMode: TrimModeState | null;
-  onTrimStart: () => void;
-  onTrimEnd: () => void;
+  onTrimStart: (targetIndex: number) => void;
+  onTrimEnd: (targetIndex: number) => void;
 }
 
 const TrimRouteOverlay: React.FC<TrimRouteOverlayProps> = ({
@@ -98,20 +127,28 @@ const TrimRouteOverlay: React.FC<TrimRouteOverlayProps> = ({
           <Marker
             position={getRoadMidpoint(currentRoads[0])}
             icon={scissorsIcon}
+            draggable
             eventHandlers={{
-              click: (e) => {
-                L.DomEvent.stopPropagation(e);
-                onTrimStart();
+              dragstart: (e) => L.DomEvent.stopPropagation(e),
+              dragend: (e) => {
+                const pos = e.target.getLatLng();
+                const idx = findClosestRoadIndex(pos.lat, pos.lng, currentRoads);
+                e.target.setLatLng(getRoadMidpoint(currentRoads[idx]));
+                onTrimStart(idx);
               },
             }}
           />
           <Marker
             position={getRoadMidpoint(currentRoads[currentRoads.length - 1])}
             icon={scissorsIcon}
+            draggable
             eventHandlers={{
-              click: (e) => {
-                L.DomEvent.stopPropagation(e);
-                onTrimEnd();
+              dragstart: (e) => L.DomEvent.stopPropagation(e),
+              dragend: (e) => {
+                const pos = e.target.getLatLng();
+                const idx = findClosestRoadIndex(pos.lat, pos.lng, currentRoads);
+                e.target.setLatLng(getRoadMidpoint(currentRoads[idx]));
+                onTrimEnd(idx);
               },
             }}
           />

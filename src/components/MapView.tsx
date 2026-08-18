@@ -182,8 +182,8 @@ interface MapViewProps {
   onForward: (fastForward: boolean) => void;
   onSaveAndClose: () => void;
   onCancelExtend: () => void;
-  onTrimStart: () => void;
-  onTrimEnd: () => void;
+  onTrimStart: (targetIndex: number) => void;
+  onTrimEnd: (targetIndex: number) => void;
   onSectorTrimStart: () => void;
   onSectorTrimEnd: () => void;
   linkMode: LinkModeState | null;

@@ -95,6 +95,9 @@ function App() {
   // Refs for values needed inside callbacks without causing stale closures
   const latestRef  = useRef({ selections, zoom, mapCenter });
   const cityBboxRef = useRef<BBox | null>(saved?.cityBbox ?? null);
+  // Whether the deepest currently selected location's boundary doc has
+  // properties.motorways_only === true (restricts fetchRoutes to highway_stat.motorway docs).
+  const motorwaysOnlyRef = useRef<boolean>(false);
   latestRef.current = { selections, zoom, mapCenter };
 
   // Close newRoute / trim / intersection panel when zoom drops below 10
@@ -138,11 +141,13 @@ function App() {
       console.log('[App] fetchPolygon response status:', res.status);
       if (!res.ok) {
         setPolygon(null);
+        motorwaysOnlyRef.current = false;
         return null;
       }
       const data = await res.json();
       console.log('[App] fetchPolygon geometry type:', (data as any)?.geometry?.type);
       setPolygon(data);
+      motorwaysOnlyRef.current = (data as any)?.properties?.motorways_only === true;
       return data;
     } catch (e) {
       console.error('[App] fetchPolygon error:', e);
@@ -153,7 +158,7 @@ function App() {
 
   const fetchRoutes = async (bbox: BBox): Promise<void> => {
     try {
-      const params = `minLon=${bbox.minLon}&minLat=${bbox.minLat}&maxLon=${bbox.maxLon}&maxLat=${bbox.maxLat}`;
+      const params = `minLon=${bbox.minLon}&minLat=${bbox.minLat}&maxLon=${bbox.maxLon}&maxLat=${bbox.maxLat}&motorwaysOnly=${motorwaysOnlyRef.current}`;
       const res = await fetch(`/api/routes/in-bbox?${params}`);
       if (!res.ok) {
         setRoutePolylines([]);
@@ -302,6 +307,12 @@ function App() {
         cityBboxRef.current = null;
       }
 
+      if (level > 2 && cityBboxRef.current) {
+        // Deselecting a deeper level may change which boundary's motorways_only
+        // applies, even though the city bbox itself is unchanged.
+        await fetchRoutes(cityBboxRef.current);
+      }
+
       persistSelections(newSelections, level <= 2 ? undefined : cityBboxRef.current ?? undefined);
       return;
     }
@@ -335,7 +346,11 @@ function App() {
         persistSelections(newSelections, bbox);
       }
     } else {
-      // Level 3+: routes unchanged, just update cookie and URL
+      // Level 3+: city bbox unchanged, but the deeper boundary's motorways_only
+      // flag may differ from its parent, so refresh the route filter.
+      if (cityBboxRef.current) {
+        await fetchRoutes(cityBboxRef.current);
+      }
       persistSelections(newSelections, cityBboxRef.current ?? undefined);
     }
   };
@@ -756,25 +771,31 @@ function App() {
     }
   };
 
-  const handleTrimStart = (): void => {
+  const handleTrimStart = (targetIndex: number): void => {
     setTrimMode((prev) => {
-      if (!prev || prev.currentRoads.length <= 1) return prev;
+      if (!prev) return prev;
+      const clamped = Math.max(0, Math.min(targetIndex, prev.currentRoads.length - 1));
+      if (clamped <= 0) return prev;
+      const removed = prev.currentRoads.slice(0, clamped);
       return {
         ...prev,
-        trimmedFromStart: [...prev.trimmedFromStart, prev.currentRoads[0]],
-        currentRoads: prev.currentRoads.slice(1),
+        trimmedFromStart: [...prev.trimmedFromStart, ...removed],
+        currentRoads: prev.currentRoads.slice(clamped),
       };
     });
   };
 
-  const handleTrimEnd = (): void => {
+  const handleTrimEnd = (targetIndex: number): void => {
     setTrimMode((prev) => {
-      if (!prev || prev.currentRoads.length <= 1) return prev;
-      const last = prev.currentRoads[prev.currentRoads.length - 1];
+      if (!prev) return prev;
+      const lastIdx = prev.currentRoads.length - 1;
+      const clamped = Math.max(0, Math.min(targetIndex, lastIdx));
+      if (clamped >= lastIdx) return prev;
+      const removed = prev.currentRoads.slice(clamped + 1);
       return {
         ...prev,
-        trimmedFromEnd: [last, ...prev.trimmedFromEnd],
-        currentRoads: prev.currentRoads.slice(0, -1),
+        trimmedFromEnd: [...removed, ...prev.trimmedFromEnd],
+        currentRoads: prev.currentRoads.slice(0, clamped + 1),
       };
     });
   };

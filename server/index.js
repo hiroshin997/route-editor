@@ -346,9 +346,11 @@ function getPrimaryRouteName(doc) {
 }
 
 /**
- * GET /api/routes/in-bbox?minLon=&minLat=&maxLon=&maxLat=
+ * GET /api/routes/in-bbox?minLon=&minLat=&maxLon=&maxLat=&motorwaysOnly=
  * Returns [{name, relation_id, routes}] for routes whose bbox overlaps the query bbox.
  * Uses the bbox_idx compound index for fast filtering.
+ * When motorwaysOnly=true, only docs with a highway_stat.motorway entry are returned
+ * (used when the selected location's boundary doc has properties.motorways_only === true).
  */
 app.get('/api/routes/in-bbox', async (req, res) => {
   try {
@@ -356,6 +358,7 @@ app.get('/api/routes/in-bbox', async (req, res) => {
     const minLat = parseFloat(req.query.minLat);
     const maxLon = parseFloat(req.query.maxLon);
     const maxLat = parseFloat(req.query.maxLat);
+    const motorwaysOnly = req.query.motorwaysOnly === 'true';
 
     if ([minLon, minLat, maxLon, maxLat].some(isNaN)) {
       return res.status(400).json({ error: 'Invalid bbox parameters' });
@@ -369,6 +372,10 @@ app.get('/api/routes/in-bbox', async (req, res) => {
       'bbox.maxLat': { $gte: minLat },
       is_deleted: { $ne: true },
     };
+
+    if (motorwaysOnly) {
+      query['highway_stat.motorway'] = { $exists: true };
+    }
 
     const docs = await osmDb
       .collection(ROUTES_COLLECTION)
