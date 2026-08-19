@@ -527,7 +527,7 @@ async function saveRoute(previewData, osmDb) {
     bbox: previewData.bbox,
     highway_stat: previewData.highway_stat || {},
     names: previewData.names,
-    routes: applyIntersectionGroupKeys(previewData.routes),
+    routes: applyIsLoopFlags(applyIntersectionGroupKeys(previewData.routes)),
     ref: '',
     network: '',
     updated_at: (() => {
@@ -539,6 +539,35 @@ async function saveRoute(previewData, osmDb) {
 
   const result = await col.insertOne(doc);
   return { relation_id: nextRelationId, _id: result.insertedId };
+}
+
+/**
+ * A path is a loop when its traversal-start node equals its traversal-end node.
+ *   start node: roads[0].road_sectors[0]  → min_node_id if ascend, else max_node_id
+ *   end node:   roads[-1].road_sectors[-1] → max_node_id if ascend, else min_node_id
+ */
+function computeIsLoop(path) {
+  const roads = path?.roads || [];
+  if (!roads.length) return false;
+
+  const firstSectors = roads[0].road_sectors || [];
+  if (!firstSectors.length) return false;
+  const firstSector = firstSectors[0];
+  const startNodeId = firstSector.direction === 'ascend' ? firstSector.min_node_id : firstSector.max_node_id;
+
+  const lastRoad = roads[roads.length - 1];
+  const lastSectors = lastRoad.road_sectors || [];
+  if (!lastSectors.length) return false;
+  const lastSector = lastSectors[lastSectors.length - 1];
+  const endNodeId = lastSector.direction === 'ascend' ? lastSector.max_node_id : lastSector.min_node_id;
+
+  return startNodeId === endNodeId;
+}
+
+/** Set routes[i].is_loop on every path based on whether its endpoints share a node. */
+function applyIsLoopFlags(routes) {
+  if (!Array.isArray(routes)) return routes;
+  return routes.map((path) => ({ ...path, is_loop: computeIsLoop(path) }));
 }
 
 /**
@@ -594,6 +623,7 @@ module.exports = {
   buildRouteFromRoadIds,
   buildRoadItemsForDirections,
   applyIntersectionGroupKeys,
+  applyIsLoopFlags,
   // Exported utilities for use in index.js
   nodeToInt,
   isForwardOnlyRoad,

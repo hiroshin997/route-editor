@@ -66,6 +66,55 @@ function buildPolylineCoords(roadObjects: RoadObject[]): [number, number][] {
   return coords;
 }
 
+// ── Sector-level slicing (for the "nodes" sector-trim feature) ─────────────────
+
+/** Flatten an ordered road list into a per-sector list, tagging each sector with its road's index. */
+export function flattenRoadSectors(roads: any[]): { roadIdx: number; sector: any }[] {
+  const flat: { roadIdx: number; sector: any }[] = [];
+  roads.forEach((road, roadIdx) => {
+    for (const sector of (road.road_sectors || [])) {
+      flat.push({ roadIdx, sector });
+    }
+  });
+  return flat;
+}
+
+/** Total number of road_sectors across an ordered road list. */
+export function sectorCount(roads: any[]): number {
+  return roads.reduce((sum, r) => sum + (r.road_sectors?.length ?? 0), 0);
+}
+
+/**
+ * Rebuild an ordered road list from a contiguous sector range [startIdx, endIdxExclusive)
+ * of a flattened sector list, regrouping consecutive same-road sectors and carrying over
+ * each road's non-sector fields from the original road list.
+ */
+export function rebuildRoadsFromSectorRange(
+  roads: any[],
+  flat: { roadIdx: number; sector: any }[],
+  startIdx: number,
+  endIdxExclusive: number,
+): any[] {
+  const result: any[] = [];
+  let currentRoadIdx: number | null = null;
+  let currentSectors: any[] = [];
+  for (let i = startIdx; i < endIdxExclusive; i++) {
+    const { roadIdx, sector } = flat[i];
+    if (roadIdx !== currentRoadIdx) {
+      if (currentRoadIdx !== null) {
+        result.push({ ...roads[currentRoadIdx], road_sectors: currentSectors });
+      }
+      currentRoadIdx = roadIdx;
+      currentSectors = [];
+    }
+    currentSectors.push(sector);
+  }
+  if (currentRoadIdx !== null) {
+    result.push({ ...roads[currentRoadIdx], road_sectors: currentSectors });
+  }
+  return result;
+}
+
 // ── Main export ───────────────────────────────────────────────────────────────
 
 export function computeRoutePolylines(docs: RouteDoc[], _bbox: BBox | null): RoutePolyline[] {
@@ -83,6 +132,7 @@ export function computeRoutePolylines(docs: RouteDoc[], _bbox: BBox | null): Rou
         relation_id: doc.relation_id,
         path_idx: i,
         road_count: routeArray.length,
+        is_loop: doc.routes[i].is_loop ?? false,
       });
       index++;
     }

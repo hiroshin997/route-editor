@@ -55,19 +55,19 @@ function closestDistToSegment(
   return Math.hypot(pLat - cLat, pLon - cLon);
 }
 
-/** Find which road in `roads` the point (lat, lon) is closest to. */
-function findClosestRoadIndex(lat: number, lon: number, roads: any[]): number {
+/** Find which road within roads[lo..hi] (inclusive) the point (lat, lon) is closest to. */
+function findClosestRoadIndexInRange(lat: number, lon: number, roads: any[], lo: number, hi: number): number {
   let minDist = Infinity;
-  let idx = 0;
-  roads.forEach((road, i) => {
-    for (const s of (road.road_sectors || [])) {
+  let idx = lo;
+  for (let i = lo; i <= hi; i++) {
+    for (const s of (roads[i]?.road_sectors || [])) {
       const dist = closestDistToSegment(lat, lon, s.lat0, s.lon0, s.lat1, s.lon1);
       if (dist < minDist) {
         minDist = dist;
         idx = i;
       }
     }
-  });
+  }
   return idx;
 }
 
@@ -98,10 +98,15 @@ const TrimRouteOverlay: React.FC<TrimRouteOverlayProps> = ({
 }) => {
   if (!trimMode) return null;
 
-  const { currentRoads, trimmedFromStart, trimmedFromEnd } = trimMode;
+  const { originalRoads, currentRoads, trimmedFromStart, trimmedFromEnd } = trimMode;
   const showScissors = currentRoads.length > 1;
   const allTrimmed = [...trimmedFromStart, ...trimmedFromEnd];
   const currentCoords = buildAllRoadsCoords(currentRoads);
+  const n = originalRoads.length;
+  // Start scissors may roam over its own currently-cut region (trimmedFromStart) plus
+  // the still-active roads, but not past the end scissors' side — and vice versa.
+  const startRangeHi = n - trimmedFromEnd.length - 1;
+  const endRangeLo = trimmedFromStart.length;
 
   return (
     <>
@@ -132,8 +137,8 @@ const TrimRouteOverlay: React.FC<TrimRouteOverlayProps> = ({
               dragstart: (e) => L.DomEvent.stopPropagation(e),
               dragend: (e) => {
                 const pos = e.target.getLatLng();
-                const idx = findClosestRoadIndex(pos.lat, pos.lng, currentRoads);
-                e.target.setLatLng(getRoadMidpoint(currentRoads[idx]));
+                const idx = findClosestRoadIndexInRange(pos.lat, pos.lng, originalRoads, 0, startRangeHi);
+                e.target.setLatLng(getRoadMidpoint(originalRoads[idx]));
                 onTrimStart(idx);
               },
             }}
@@ -146,8 +151,8 @@ const TrimRouteOverlay: React.FC<TrimRouteOverlayProps> = ({
               dragstart: (e) => L.DomEvent.stopPropagation(e),
               dragend: (e) => {
                 const pos = e.target.getLatLng();
-                const idx = findClosestRoadIndex(pos.lat, pos.lng, currentRoads);
-                e.target.setLatLng(getRoadMidpoint(currentRoads[idx]));
+                const idx = findClosestRoadIndexInRange(pos.lat, pos.lng, originalRoads, endRangeLo, n - 1);
+                e.target.setLatLng(getRoadMidpoint(originalRoads[idx]));
                 onTrimEnd(idx);
               },
             }}

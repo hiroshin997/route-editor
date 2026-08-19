@@ -2,6 +2,7 @@ import React from 'react';
 import { Marker, Polyline } from 'react-leaflet';
 import L from 'leaflet';
 import { SectorTrimModeState } from '../types/route';
+import { flattenRoadSectors, sectorCount } from '../utils/routeUtils';
 
 // ContentCut SVG at 75% of TrimRouteOverlay's scissors (39×39, fill=#f87171)
 const MINI_SCISSORS_HTML = `<svg xmlns="http://www.w3.org/2000/svg" width="39" height="39" viewBox="0 0 24 24" fill="#f87171">
@@ -48,18 +49,46 @@ function buildAllCoords(roads: any[]): [number, number][] {
   return all;
 }
 
-function totalSectorCount(roads: any[]): number {
-  return roads.reduce((sum, r) => sum + (r.road_sectors?.length ?? 0), 0);
-}
-
 function getSectorMidpoint(sector: any): [number, number] {
   return [(sector.lat0 + sector.lat1) / 2, (sector.lon0 + sector.lon1) / 2];
 }
 
+function closestDistToSegment(
+  pLat: number, pLon: number,
+  aLat: number, aLon: number,
+  bLat: number, bLon: number,
+): number {
+  const dx = bLon - aLon, dy = bLat - aLat;
+  const lenSq = dx * dx + dy * dy;
+  if (lenSq < 1e-14) return Math.hypot(pLat - aLat, pLon - aLon);
+  const t = Math.max(0, Math.min(1, ((pLon - aLon) * dx + (pLat - aLat) * dy) / lenSq));
+  const cLat = aLat + t * dy, cLon = aLon + t * dx;
+  return Math.hypot(pLat - cLat, pLon - cLon);
+}
+
+/** Find which sector within flat[lo..hi] (inclusive) the point (lat, lon) is closest to. */
+function findClosestSectorIndexInRange(
+  lat: number, lon: number,
+  flat: { roadIdx: number; sector: any }[],
+  lo: number, hi: number,
+): number {
+  let minDist = Infinity;
+  let idx = lo;
+  for (let i = lo; i <= hi; i++) {
+    const s = flat[i].sector;
+    const dist = closestDistToSegment(lat, lon, s.lat0, s.lon0, s.lat1, s.lon1);
+    if (dist < minDist) {
+      minDist = dist;
+      idx = i;
+    }
+  }
+  return idx;
+}
+
 interface SectorTrimOverlayProps {
   sectorTrimMode: SectorTrimModeState | null;
-  onTrimStart: () => void;
-  onTrimEnd: () => void;
+  onTrimStart: (targetSectorIndex: number) => void;
+  onTrimEnd: (targetSectorIndex: number) => void;
 }
 
 const SectorTrimOverlay: React.FC<SectorTrimOverlayProps> = ({
@@ -69,11 +98,19 @@ const SectorTrimOverlay: React.FC<SectorTrimOverlayProps> = ({
 }) => {
   if (!sectorTrimMode) return null;
 
-  const { currentRoads } = sectorTrimMode;
+  const { originalRoads, currentRoads, trimmedFromStart, trimmedFromEnd } = sectorTrimMode;
   if (!currentRoads.length) return null;
 
   const coords = buildAllCoords(currentRoads);
-  const showScissors = totalSectorCount(currentRoads) > 1;
+  const showScissors = sectorCount(currentRoads) > 1;
+  const allTrimmed = [...trimmedFromStart, ...trimmedFromEnd];
+
+  // Flattened original sectors, used to resolve a drop position to a global sector
+  // index and to bound each scissors' reach to its own side of the route.
+  const flat = flattenRoadSectors(originalRoads);
+  const n = flat.length;
+  const startRangeHi = n - sectorCount(trimmedFromEnd) - 1;
+  const endRangeLo = sectorCount(trimmedFromStart);
 
   const firstSector = currentRoads[0]?.road_sectors?.[0];
   const lastRoad = currentRoads[currentRoads.length - 1];
@@ -92,12 +129,30 @@ const SectorTrimOverlay: React.FC<SectorTrimOverlayProps> = ({
         />
       )}
 
+      {/* Gray dotted polylines for trimmed sectors */}
+      {allTrimmed.map((road, i) => (
+        <Polyline
+          key={`sector-trim-gray-${i}`}
+          positions={buildRoadCoords(road)}
+          pathOptions={{ color: '#888', weight: 3, dashArray: '6 5', opacity: 0.8 }}
+        />
+      ))}
+
       {/* Start scissors marker */}
       {showScissors && firstSector && (
         <Marker
           position={getSectorMidpoint(firstSector)}
           icon={miniIcon}
-          eventHandlers={{ click: onTrimStart }}
+          draggable
+          eventHandlers={{
+            dragstart: (e) => L.DomEvent.stopPropagation(e),
+            dragend: (e) => {
+              const pos = e.target.getLatLng();
+              const idx = findClosestSectorIndexInRange(pos.lat, pos.lng, flat, 0, startRangeHi);
+              e.target.setLatLng(getSectorMidpoint(flat[idx].sector));
+              onTrimStart(idx);
+            },
+          }}
         />
       )}
 
@@ -106,7 +161,16 @@ const SectorTrimOverlay: React.FC<SectorTrimOverlayProps> = ({
         <Marker
           position={getSectorMidpoint(lastSector)}
           icon={miniIcon}
-          eventHandlers={{ click: onTrimEnd }}
+          draggable
+          eventHandlers={{
+            dragstart: (e) => L.DomEvent.stopPropagation(e),
+            dragend: (e) => {
+              const pos = e.target.getLatLng();
+              const idx = findClosestSectorIndexInRange(pos.lat, pos.lng, flat, endRangeLo, n - 1);
+              e.target.setLatLng(getSectorMidpoint(flat[idx].sector));
+              onTrimEnd(idx);
+            },
+          }}
         />
       )}
     </>

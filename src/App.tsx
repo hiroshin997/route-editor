@@ -10,7 +10,7 @@ import NamesEditModal from './components/NamesEditModal';
 import TrimRoutePanel from './components/TrimRoutePanel';
 import IntersectionPanel from './components/IntersectionPanel';
 import { BBox, RouteDoc, RoutePolyline, EndpointInfo, RoadArrow, PendingRoadItem, ExtendModeState, TrimModeState, SectorTrimModeState, LinkModeState, LinkCandidate, Intersection, IntersectionModeState, DisplayIntersectionState, FromScratchState } from './types/route';
-import { computeBboxFromGeoJSON, computeRoutePolylines } from './utils/routeUtils';
+import { computeBboxFromGeoJSON, computeRoutePolylines, flattenRoadSectors, rebuildRoadsFromSectorRange, sectorCount } from './utils/routeUtils';
 import { getNameVariations } from './utils/nameUtils';
 import { buildAddressPath, parseAddressPath } from './utils/addressPath';
 import './App.css';
@@ -771,16 +771,20 @@ function App() {
     }
   };
 
+  // targetIndex is a global index into trimMode.originalRoads. Moving it toward the
+  // opposite end cuts further roads; moving it back toward the original endpoint
+  // restores previously-trimmed roads (drag onto the gray dashed line to undo).
   const handleTrimStart = (targetIndex: number): void => {
     setTrimMode((prev) => {
       if (!prev) return prev;
-      const clamped = Math.max(0, Math.min(targetIndex, prev.currentRoads.length - 1));
-      if (clamped <= 0) return prev;
-      const removed = prev.currentRoads.slice(0, clamped);
+      const n = prev.originalRoads.length;
+      const maxStart = n - prev.trimmedFromEnd.length - 1;
+      const startCount = Math.max(0, Math.min(targetIndex, maxStart));
+      const endCount = prev.trimmedFromEnd.length;
       return {
         ...prev,
-        trimmedFromStart: [...prev.trimmedFromStart, ...removed],
-        currentRoads: prev.currentRoads.slice(clamped),
+        trimmedFromStart: prev.originalRoads.slice(0, startCount),
+        currentRoads: prev.originalRoads.slice(startCount, n - endCount),
       };
     });
   };
@@ -788,14 +792,14 @@ function App() {
   const handleTrimEnd = (targetIndex: number): void => {
     setTrimMode((prev) => {
       if (!prev) return prev;
-      const lastIdx = prev.currentRoads.length - 1;
-      const clamped = Math.max(0, Math.min(targetIndex, lastIdx));
-      if (clamped >= lastIdx) return prev;
-      const removed = prev.currentRoads.slice(clamped + 1);
+      const n = prev.originalRoads.length;
+      const startCount = prev.trimmedFromStart.length;
+      const lastKeptIdx = Math.max(startCount, Math.min(targetIndex, n - 1));
+      const endCount = n - 1 - lastKeptIdx;
       return {
         ...prev,
-        trimmedFromEnd: [...removed, ...prev.trimmedFromEnd],
-        currentRoads: prev.currentRoads.slice(0, clamped + 1),
+        trimmedFromEnd: prev.originalRoads.slice(n - endCount),
+        currentRoads: prev.originalRoads.slice(startCount, n - endCount),
       };
     });
   };
@@ -835,40 +839,47 @@ function App() {
     try {
       const res = await fetch(`/api/routes/${relation_id}/roads?path_idx=${path_idx}`);
       const roads: any[] = await res.json();
-      setSectorTrimMode({ relation_id, path_idx, originalRoads: roads, currentRoads: roads });
+      setSectorTrimMode({ relation_id, path_idx, originalRoads: roads, currentRoads: roads, trimmedFromStart: [], trimmedFromEnd: [] });
       setPanelMode('sectorTrim');
     } catch (e) {
       console.error('[App] failed to fetch road items for sector trim:', e);
     }
   };
 
-  const handleSectorTrimStart = (): void => {
+  // targetSectorIndex is a global sector index into the flattened sectors of
+  // sectorTrimMode.originalRoads. Same drag/restore model as the road-level trim
+  // (handleTrimStart/handleTrimEnd), but at road_sector ("node") granularity, so a
+  // single drag only ever advances/retreats the boundary through the current
+  // first/last road's sectors — never jumps a whole road at once.
+  const handleSectorTrimStart = (targetSectorIndex: number): void => {
     setSectorTrimMode((prev) => {
-      if (!prev || !prev.currentRoads.length) return prev;
-      const firstRoad = prev.currentRoads[0];
-      const newSectors = (firstRoad.road_sectors || []).slice(1);
-      let newRoads;
-      if (newSectors.length === 0) {
-        newRoads = prev.currentRoads.slice(1);
-      } else {
-        newRoads = [{ ...firstRoad, road_sectors: newSectors }, ...prev.currentRoads.slice(1)];
-      }
-      return { ...prev, currentRoads: newRoads };
+      if (!prev) return prev;
+      const flat = flattenRoadSectors(prev.originalRoads);
+      const n = flat.length;
+      const endCount = sectorCount(prev.trimmedFromEnd);
+      const maxStart = n - endCount - 1;
+      const startCount = Math.max(0, Math.min(targetSectorIndex, maxStart));
+      return {
+        ...prev,
+        trimmedFromStart: rebuildRoadsFromSectorRange(prev.originalRoads, flat, 0, startCount),
+        currentRoads: rebuildRoadsFromSectorRange(prev.originalRoads, flat, startCount, n - endCount),
+      };
     });
   };
 
-  const handleSectorTrimEnd = (): void => {
+  const handleSectorTrimEnd = (targetSectorIndex: number): void => {
     setSectorTrimMode((prev) => {
-      if (!prev || !prev.currentRoads.length) return prev;
-      const lastRoad = prev.currentRoads[prev.currentRoads.length - 1];
-      const newSectors = (lastRoad.road_sectors || []).slice(0, -1);
-      let newRoads;
-      if (newSectors.length === 0) {
-        newRoads = prev.currentRoads.slice(0, -1);
-      } else {
-        newRoads = [...prev.currentRoads.slice(0, -1), { ...lastRoad, road_sectors: newSectors }];
-      }
-      return { ...prev, currentRoads: newRoads };
+      if (!prev) return prev;
+      const flat = flattenRoadSectors(prev.originalRoads);
+      const n = flat.length;
+      const startCount = sectorCount(prev.trimmedFromStart);
+      const lastKeptIdx = Math.max(startCount, Math.min(targetSectorIndex, n - 1));
+      const endCount = n - 1 - lastKeptIdx;
+      return {
+        ...prev,
+        trimmedFromEnd: rebuildRoadsFromSectorRange(prev.originalRoads, flat, n - endCount, n),
+        currentRoads: rebuildRoadsFromSectorRange(prev.originalRoads, flat, startCount, n - endCount),
+      };
     });
   };
 

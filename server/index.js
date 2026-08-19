@@ -4,7 +4,7 @@ const express = require('express');
 const { MongoClient } = require('mongodb');
 const cors = require('cors');
 
-const { buildRoutePreview, saveRoute, buildRouteFromRoadIds, buildRoadItemsForDirections, applyIntersectionGroupKeys, nodeToInt, isForwardOnlyRoad, bearingDegreesInt, hubenyJapanM, ROAD_PROJECTION } = require('./routeBuilder');
+const { buildRoutePreview, saveRoute, buildRouteFromRoadIds, buildRoadItemsForDirections, applyIntersectionGroupKeys, applyIsLoopFlags, nodeToInt, isForwardOnlyRoad, bearingDegreesInt, hubenyJapanM, ROAD_PROJECTION } = require('./routeBuilder');
 const { getNameVariations } = require('../src/utils/nameUtils');
 
 const app = express();
@@ -538,7 +538,7 @@ app.put('/api/routes/:relation_id/trim', async (req, res) => {
       return road;
     });
 
-    const routes = (doc.routes || []).map((p, i) => (i === path_idx ? { ...p, roads: updated } : p));
+    const routes = applyIsLoopFlags((doc.routes || []).map((p, i) => (i === path_idx ? { ...p, roads: updated } : p)));
     const bbox = computeBboxFromPaths(routes);
 
     const pad = (n) => String(n).padStart(2, '0');
@@ -701,7 +701,7 @@ app.post('/api/routes/:relation_id/link', async (req, res) => {
       newRoads = [...candRoads, ...origRoads];
     }
 
-    const newRoutes = origDoc.routes.map((p, i) => i === path_idx ? { ...p, roads: newRoads } : p);
+    const newRoutes = applyIsLoopFlags(origDoc.routes.map((p, i) => i === path_idx ? { ...p, roads: newRoads } : p));
     const bbox = computeBboxFromPaths(newRoutes);
 
     // Merge top-level roads[] with new road_ids from candidate
@@ -751,7 +751,7 @@ app.put('/api/routes/:relation_id/sector-trim', async (req, res) => {
       return road;
     });
 
-    const routes = (doc.routes || []).map((p, i) => (i === path_idx ? { ...p, roads: updated } : p));
+    const routes = applyIsLoopFlags((doc.routes || []).map((p, i) => (i === path_idx ? { ...p, roads: updated } : p)));
     const bbox = computeBboxFromPaths(routes);
 
     const pad = (n) => String(n).padStart(2, '0');
@@ -1150,11 +1150,12 @@ app.post('/api/routes/:relation_id/extend', async (req, res) => {
         ...newRoadIds.filter((id) => !existingTopIds.has(id)).map((id) => ({ road_id: id, role: '' })),
       ];
 
-      const bbox = computeBboxFromPaths(routes);
+      const routesWithLoop = applyIsLoopFlags(routes);
+      const bbox = computeBboxFromPaths(routesWithLoop);
       const existingGroups = doc.intersection_groups || {};
-      const updatedGroups = await buildUpdatedIntersectionGroups(routes, newRoadIds, existingGroups);
+      const updatedGroups = await buildUpdatedIntersectionGroups(routesWithLoop, newRoadIds, existingGroups);
 
-      const $set = { routes, bbox, roads: allRoadsTop, updated_at };
+      const $set = { routes: routesWithLoop, bbox, roads: allRoadsTop, updated_at };
       if (updatedGroups) $set.intersection_groups = updatedGroups;
       await col.updateOne({ relation_id }, { $set });
       return res.json({ ok: true, endpoint_type_changed: reversedOccurred });
@@ -1171,7 +1172,7 @@ app.post('/api/routes/:relation_id/extend', async (req, res) => {
     const allIds = [...existingIds, ...new_road_ids.map(Number)];
     // Pass null for cityBbox to skip step35Filter (geographic filter causes roads to be lost)
     const rebuilt = await buildRouteFromRoadIds(allIds, null, osmDb);
-    const routesWithKeys = applyIntersectionGroupKeys(rebuilt.routes);
+    const routesWithKeys = applyIsLoopFlags(applyIntersectionGroupKeys(rebuilt.routes));
 
     const existingGroupsFb = doc.intersection_groups || {};
     const updatedGroupsFb = await buildUpdatedIntersectionGroups(

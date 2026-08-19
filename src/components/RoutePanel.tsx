@@ -4,6 +4,7 @@ import OpenWithIcon from '@mui/icons-material/OpenWith';
 import ContentCutIcon from '@mui/icons-material/ContentCut';
 import LinkIcon from '@mui/icons-material/Link';
 import TrafficIcon from '@mui/icons-material/Traffic';
+import LoopIcon from '@mui/icons-material/Loop';
 import { RoutePolyline } from '../types/route';
 
 // route-panel は表示切り替えで unmount されるため、スクロール位置はモジュールスコープで保持する。
@@ -91,7 +92,10 @@ const RoutePanel: React.FC<RoutePanelProps> = ({
               <span className={`route-panel-index${isActive ? ' route-panel-index--active' : ''}`}>
                 {rp.index}
               </span>
-              <span className="route-panel-name">{rp.name}</span>
+              <span className="route-panel-name">
+                {rp.name}
+                {rp.is_loop && <LoopIcon fontSize="small" className="route-panel-loop-icon" />}
+              </span>
               {rp.relation_id !== undefined && (
                 <>
                   <button

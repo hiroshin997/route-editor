@@ -28,6 +28,8 @@ export interface RoadObject {
 export interface RoutePath {
   roads: RoadObject[];
   intersection_group_key?: string;
+  /** true when this path's start and end nodes coincide */
+  is_loop?: boolean;
 }
 
 /** One document from jproad_routes collection. */
@@ -92,6 +94,8 @@ export interface RoutePolyline {
   path_idx?: number;
   /** Number of road_items in this path (for disabling trim button) */
   road_count?: number;
+  /** true when this path's start and end nodes coincide */
+  is_loop?: boolean;
 }
 
 // ── From-scratch route creation ───────────────────────────────────────────────
@@ -129,6 +133,8 @@ export interface SectorTrimModeState {
   path_idx: number;       // always 0 (routes[0])
   originalRoads: any[];   // unchanged – for isDirty check
   currentRoads: any[];    // working copy (road_sectors removed)
+  trimmedFromStart: any[]; // sectors removed from front, as partial/whole road objects (gray display)
+  trimmedFromEnd: any[];   // sectors removed from back  (gray display)
 }
 
 export interface EndpointInfo {

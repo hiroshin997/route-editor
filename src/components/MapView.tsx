@@ -184,8 +184,8 @@ interface MapViewProps {
   onCancelExtend: () => void;
   onTrimStart: (targetIndex: number) => void;
   onTrimEnd: (targetIndex: number) => void;
-  onSectorTrimStart: () => void;
-  onSectorTrimEnd: () => void;
+  onSectorTrimStart: (targetIndex: number) => void;
+  onSectorTrimEnd: (targetIndex: number) => void;
   linkMode: LinkModeState | null;
   onLinkEndpointClick: RouteLinkOverlayProps['onEndpointClick'];
   onLinkSelectCandidate: RouteLinkOverlayProps['onSelectCandidate'];
