@@ -1,6 +1,6 @@
 import React, { useState, useRef, useCallback } from 'react';
 import ReactDOM from 'react-dom';
-import { Marker, Polyline, useMap, useMapEvents } from 'react-leaflet';
+import { Marker, Polyline, Tooltip, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import { Intersection, RoutePolyline } from '../types/route';
 import { getNameVariations } from '../utils/nameUtils';
@@ -247,7 +247,15 @@ const IntersectionOverlay: React.FC<IntersectionOverlayProps> = ({
               contextmenu: (e) => handleMarkerContextMenu(e, inter),
               dragend: (e) => handleDragEnd(e, inter.intersection_id),
             }}
-          />
+          >
+            {inter.names.length > 0 && (
+              <Tooltip direction="right" offset={[10, 0]} opacity={1} className="intersection-name-tooltip">
+                {inter.names.map((name, idx) => (
+                  <div key={idx} className="intersection-name-tooltip-item">{name}</div>
+                ))}
+              </Tooltip>
+            )}
+          </Marker>
         );
       })}
 

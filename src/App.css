@@ -556,6 +556,16 @@ body,
   overflow: hidden; text-overflow: ellipsis;
 }
 
+.intersection-name-tooltip {
+  font-size: 12px;
+  color: #000;
+  padding: 4px 8px;
+  white-space: nowrap;
+}
+.intersection-name-tooltip-item + .intersection-name-tooltip-item {
+  margin-top: 2px;
+}
+
 /* ── Intersection context menu ───────────────────────────────────────────── */
 .intersection-ctx-menu {
   position: absolute; z-index: 2000;
