@@ -485,6 +485,30 @@ function computeBboxFromPaths(routes) {
 }
 
 /**
+ * Filter intersection_groups[trimKey] down to items that still sit on a surviving
+ * road_sector (matched by road_id + coord_index) somewhere in `routes` under `trimKey`.
+ * Used after a trim so intersections on removed roads/road_sectors are dropped too.
+ */
+function filterIntersectionGroupForTrim(existingGroups, trimKey, routes) {
+  if (!trimKey || !existingGroups[trimKey]) return existingGroups;
+  const validCoordIndexesByRoad = new Map();
+  for (const path of routes) {
+    if (path.intersection_group_key !== trimKey) continue;
+    for (const r of (path.roads || [])) {
+      const roadId = Number(r.road_id);
+      let set = validCoordIndexesByRoad.get(roadId);
+      if (!set) { set = new Set(); validCoordIndexesByRoad.set(roadId, set); }
+      for (const s of (r.road_sectors || [])) set.add(s.coord_index);
+    }
+  }
+  const filtered = (existingGroups[trimKey] || []).filter((item) => {
+    const set = validCoordIndexesByRoad.get(Number(item.road_id));
+    return !!set && set.has(item.coord_index);
+  });
+  return { ...existingGroups, [trimKey]: filtered };
+}
+
+/**
  * GET /api/routes/:relation_id/roads?path_idx=N
  * Returns the road_items array for routes[N] of the specified route doc.
  */
@@ -545,19 +569,12 @@ app.put('/api/routes/:relation_id/trim', async (req, res) => {
     const jst = new Date(Date.now() + 9 * 3600 * 1000);
     const updated_at = `${jst.getUTCFullYear()}-${pad(jst.getUTCMonth()+1)}-${pad(jst.getUTCDate())}T${pad(jst.getUTCHours())}:${pad(jst.getUTCMinutes())}:${pad(jst.getUTCSeconds())}+09:00`;
 
-    // Remove intersections whose road_id is no longer in any path sharing the same key
+    // Remove intersections that sat on roads/road_sectors trimmed away from this path
     const trimKey = doc.routes[path_idx]?.intersection_group_key;
     const existingGroups = doc.intersection_groups || {};
     const $set = { routes, bbox, updated_at };
     if (trimKey && existingGroups[trimKey]) {
-      const validIds = new Set();
-      for (const path of routes) {
-        if (path.intersection_group_key === trimKey) {
-          for (const r of (path.roads || [])) validIds.add(Number(r.road_id));
-        }
-      }
-      const filtered = (existingGroups[trimKey] || []).filter((item) => validIds.has(Number(item.road_id)));
-      $set.intersection_groups = { ...existingGroups, [trimKey]: filtered };
+      $set.intersection_groups = filterIntersectionGroupForTrim(existingGroups, trimKey, routes);
     }
 
     await col.updateOne({ relation_id }, { $set });
@@ -758,19 +775,12 @@ app.put('/api/routes/:relation_id/sector-trim', async (req, res) => {
     const jst = new Date(Date.now() + 9 * 3600 * 1000);
     const updated_at = `${jst.getUTCFullYear()}-${pad(jst.getUTCMonth()+1)}-${pad(jst.getUTCDate())}T${pad(jst.getUTCHours())}:${pad(jst.getUTCMinutes())}:${pad(jst.getUTCSeconds())}+09:00`;
 
-    // Remove intersections whose road_id is no longer present in the trimmed path
+    // Remove intersections that sat on road_sectors trimmed away from this path
     const trimKey = doc.routes[path_idx]?.intersection_group_key;
     const existingGroups = doc.intersection_groups || {};
     const $set = { routes, bbox, updated_at };
     if (trimKey && existingGroups[trimKey]) {
-      const validIds = new Set();
-      for (const path of routes) {
-        if (path.intersection_group_key === trimKey) {
-          for (const r of (path.roads || [])) validIds.add(Number(r.road_id));
-        }
-      }
-      const filtered = (existingGroups[trimKey] || []).filter((item) => validIds.has(Number(item.road_id)));
-      $set.intersection_groups = { ...existingGroups, [trimKey]: filtered };
+      $set.intersection_groups = filterIntersectionGroupForTrim(existingGroups, trimKey, routes);
     }
 
     await col.updateOne({ relation_id }, { $set });
