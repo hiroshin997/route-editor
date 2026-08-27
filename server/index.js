@@ -132,17 +132,57 @@ app.get('/api/locations/polygon', async (req, res) => {
 
 // ── Intersection helpers ──────────────────────────────────────────────────────
 
+// An intersection may only be attached to a road_sector that is at most this far
+// (in metres) from the intersection's own coordinate. Beyond it we treat the
+// intersection as "not on the saved geometry" and drop it.
+const INTERSECTION_SNAP_MAX_M = 40;
+
+/** Closest point (in lon/lat degrees) on segment A→B to point P. */
+function closestPointOnSegmentDeg(pLat, pLon, aLat, aLon, bLat, bLon) {
+  const dx = bLon - aLon, dy = bLat - aLat;
+  const lenSq = dx * dx + dy * dy;
+  const t = lenSq < 1e-14
+    ? 0
+    : Math.max(0, Math.min(1, ((pLon - aLon) * dx + (pLat - aLat) * dy) / lenSq));
+  return [aLat + t * dy, aLon + t * dx];
+}
+
+/**
+ * Snap (lat, lon) onto the nearest road_sector and return its identity.
+ * @param {{road_id:number, coord_index:number, lon0,lat0,lon1,lat1:number}[]} sectors
+ * @returns {{road_id:number, coord_index:number, lat:number, lon:number, distM:number}|null}
+ */
+function snapPointToSectors(lat, lon, sectors) {
+  let best = null;
+  for (const s of sectors) {
+    const [cLat, cLon] = closestPointOnSegmentDeg(lat, lon, s.lat0, s.lon0, s.lat1, s.lon1);
+    const distM = hubenyJapanM(lat, lon, cLat, cLon);
+    if (!best || distM < best.distM) {
+      best = { road_id: s.road_id, coord_index: s.coord_index, lat: cLat, lon: cLon, distM };
+    }
+  }
+  return best;
+}
+
 /**
  * buildIntersectionGroup
  * Given intersection documents from jpintersections, returns the list of
  * intersection items to add to a route's intersection_groups entry.
  *
+ * The road_id / coord_index carried by jpintersections.refined_roads are indexed
+ * against the *full* road centreline (a vertex index), which does not line up
+ * with routes[].roads[].road_sectors[].coord_index (a segment index) and can
+ * point past the last sector. We therefore ignore those two fields and snap the
+ * intersection's coordinate onto the actual saved road_sectors instead.
+ *
  * @param {object[]} intersectionDocs - docs from jpintersections collection
+ * @param {object[]} pathSectors      - {road_id, coord_index, lon0,lat0,lon1,lat1} of the new roads in this group
  * @param {number[]} roadIds          - road IDs being added (new/extended roads)
  * @param {string[]} usedNames        - NFKC-normalised names already in the route
  */
-function buildIntersectionGroup(intersectionDocs, roadIds, usedNames = []) {
+function buildIntersectionGroup(intersectionDocs, pathSectors, roadIds, usedNames = []) {
   if (!Array.isArray(roadIds) || roadIds.length === 0) return [];
+  if (!Array.isArray(pathSectors) || pathSectors.length === 0) return [];
 
   const roadIdsSet   = new Set(roadIds.map(Number));
   const usedNamesSet = new Set(usedNames);
@@ -183,17 +223,22 @@ function buildIntersectionGroup(intersectionDocs, roadIds, usedNames = []) {
       );
       pick = sorted[Math.floor(sorted.length / 2)];
     }
-    if (pick) {
-      group.push({
-        intersection_id: seenId[name],
-        names:           getNameVariations(name),
-        road_id:         Number(pick.road_id),
-        coord_index:     pick.coord_index,
-        lat:             pick.lat,
-        lon:             pick.lon,
-        highway_tag:     pick.highway_tag,
-      });
-    }
+    if (!pick) continue;
+
+    // Ignore refined_roads' own road_id / coord_index (see doc comment) and
+    // resolve them from the real saved geometry instead.
+    const snap = snapPointToSectors(pick.lat, pick.lon, pathSectors);
+    if (!snap || snap.distM > INTERSECTION_SNAP_MAX_M) continue;
+
+    group.push({
+      intersection_id: seenId[name],
+      names:           getNameVariations(name),
+      road_id:         snap.road_id,
+      coord_index:     snap.coord_index,
+      lat:             pick.lat,
+      lon:             pick.lon,
+      highway_tag:     pick.highway_tag,
+    });
   }
   return group;
 }
@@ -236,6 +281,23 @@ async function buildUpdatedIntersectionGroups(routes, newRoadIds, existingGroups
       .find({ 'refined_roads.road_id': { $in: roadIds } })
       .toArray();
 
+    // road_sectors of the newly added roads under this group key – the geometry
+    // an intersection coordinate is snapped onto to derive road_id/coord_index.
+    const pathSectors = [];
+    for (const path of (routes || [])) {
+      if (path.intersection_group_key !== key) continue;
+      for (const r of (path.roads || [])) {
+        if (!roadIdsSet.has(Number(r.road_id))) continue;
+        for (const s of (r.road_sectors || [])) {
+          pathSectors.push({
+            road_id: Number(r.road_id),
+            coord_index: s.coord_index,
+            lon0: s.lon0, lat0: s.lat0, lon1: s.lon1, lat1: s.lat1,
+          });
+        }
+      }
+    }
+
     // Use only names already in THIS group to avoid false deduplication across
     // groups that share the same physical roads (e.g. key "0" vs key "1").
     const usedNamesForKey = new Set(
@@ -243,7 +305,7 @@ async function buildUpdatedIntersectionGroups(routes, newRoadIds, existingGroups
         .flatMap((i) => (Array.isArray(i.names) ? i.names : []))
     );
 
-    const newItems = buildIntersectionGroup(docs, roadIds, [...usedNamesForKey]);
+    const newItems = buildIntersectionGroup(docs, pathSectors, roadIds, [...usedNamesForKey]);
     if (newItems.length > 0) {
       updated[key] = [...(updated[key] || []), ...newItems];
       changed = true;
