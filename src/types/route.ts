@@ -214,7 +214,9 @@ export interface LinkCandidate {
   relation_id: number;
   name: string;
   path_idx: number;
-  /** [lat, lon] pairs for displaying the candidate polyline */
+  /** true when this candidate must be reversed before joining (start–start / end–end) */
+  reverse: boolean;
+  /** [lat, lon] pairs for displaying the candidate polyline (already reversed when reverse=true) */
   coords: [number, number][];
 }
 

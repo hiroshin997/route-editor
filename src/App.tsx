@@ -42,19 +42,16 @@ function writeCookieState(state: SavedState): void {
 
 /**
  * Filter arrow candidates from /api/roads/at-node.
- * When either the primary path or the reverse path already has one-way roads,
- * hide one-way arrows that would be skipped on the server (physically invalid
- * or would break reverse_roads on the sub-path):
+ * The existing route (route_a) is never reversed to fit a candidate, so a
+ * one-way road that would have to be driven against its arrow to attach here
+ * is dropped — regardless of whether the route already contains one-way roads:
  *   'end'   endpoint + oneway + descend  (to_node=nodeId – can't depart backward)
  *   'start' endpoint + oneway + ascend   (from_node=nodeId – can't arrive backward)
  */
 function filterValidArrows(
   arrows: import('./types/route').RoadArrow[],
   endpointType: 'start' | 'end',
-  hasOneway: boolean,
-  hasSubOneway: boolean,
 ): import('./types/route').RoadArrow[] {
-  if (!hasOneway && !hasSubOneway) return arrows;
   return arrows.filter((a) => {
     if (!a.oneway) return true;
     if (endpointType === 'end'   && a.direction === 'descend') return false;
@@ -429,7 +426,7 @@ function App() {
     const params = `nodeId=${ep.node_id}&excludeRoadIds=${excludeIds.join(',')}`;
     const res = await fetch(`/api/roads/at-node?${params}`);
     const rawArrows: RoadArrow[] = await res.json();
-    const arrows = filterValidArrows(rawArrows, ep.endpoint, hasOneway, hasSubOneway);
+    const arrows = filterValidArrows(rawArrows, ep.endpoint);
 
     setExtendMode((prev) => {
       if (!prev?.modal) return prev;
@@ -473,15 +470,11 @@ function App() {
         new_lon: arrow.new_lon,
       };
 
-      const isSpecialReverse = !currentModal.has_oneway && !currentModal.has_sub_oneway && arrow.oneway && (
-        (currentModal.endpoint_type === 'end'   && arrow.direction === 'descend') ||
-        (currentModal.endpoint_type === 'start' && arrow.direction === 'ascend')
-      );
+      // route_a is never reversed, so the endpoint type stays fixed for the
+      // whole fast-forward chain.
+      const newEndpointType = currentModal.endpoint_type;
       const newHasOneway = currentModal.has_oneway || arrow.oneway;
       const newHasSubOneway = currentModal.has_sub_oneway;
-      const newEndpointType: 'start' | 'end' = isSpecialReverse
-        ? (currentModal.endpoint_type === 'end' ? 'start' : 'end')
-        : currentModal.endpoint_type;
       const newExcluded = [...currentModal.excluded_road_ids, arrow.road_id];
 
       accumulatedPendingRoads = [...accumulatedPendingRoads, newPending];
@@ -490,7 +483,7 @@ function App() {
       const params = `nodeId=${arrow.new_node_id}&excludeRoadIds=${newExcluded.join(',')}`;
       const res = await fetch(`/api/roads/at-node?${params}`);
       const rawArrows: RoadArrow[] = await res.json();
-      const newArrows = filterValidArrows(rawArrows, newEndpointType, newHasOneway, newHasSubOneway);
+      const newArrows = filterValidArrows(rawArrows, newEndpointType);
 
       // Update local modal state
       currentModal = {
@@ -992,6 +985,7 @@ function App() {
           endpoint_type: linkMode.clickedEndpoint,
           candidate_relation_id: candidate.relation_id,
           candidate_path_idx: candidate.path_idx,
+          reverse: candidate.reverse,
         }),
       });
       if (res.ok) {

@@ -546,6 +546,120 @@ function computeBboxFromPaths(routes) {
   return isFinite(minLat) ? { minLat, maxLat, minLon, maxLon } : { minLat: 0, maxLat: 0, minLon: 0, maxLon: 0 };
 }
 
+// ── Path traversal / reversal helpers ────────────────────────────────────────
+
+/**
+ * Flatten an ordered roads[] list into one sequence of road_sectors, each
+ * annotated with its two endpoint nodes and their coords.
+ * Convention (holds regardless of `direction`): coord0 (lat0/lon0) ↔ min_node_id,
+ * coord1 (lat1/lon1) ↔ max_node_id.
+ */
+function flattenPathSectors(roads) {
+  const out = [];
+  for (const road of roads || []) {
+    for (const s of road.road_sectors || []) {
+      // node ids may arrive as BSON Long / {$numberLong} – normalise so === works
+      out.push({
+        a: nodeToInt(s.min_node_id), aLat: s.lat0, aLon: s.lon0,
+        b: nodeToInt(s.max_node_id), bLat: s.lat1, bLon: s.lon1,
+        direction: s.direction,
+      });
+    }
+  }
+  return out;
+}
+
+/**
+ * True traversal endpoints of a path, derived from sector-to-sector node
+ * connectivity (min_node_id / max_node_id) rather than a single sector's
+ * `direction` flag. After edits (extend/link) `direction` can disagree with the
+ * road ordering — e.g. a junction node ends up labelled as the path end — but
+ * the min/max_node_id adjacency stays intact. `direction` is only used as a
+ * fallback for single-sector paths or where connectivity is broken.
+ *
+ * Returns { start: {node, lat, lon}, end: {node, lat, lon}, isLoop, broken } or null.
+ */
+function pathEndpoints(roads) {
+  const flat = flattenPathSectors(roads);
+  if (!flat.length) return null;
+
+  const nodeEnd = (s, id) => (id === s.a
+    ? { node: s.a, lat: s.aLat, lon: s.aLon }
+    : { node: s.b, lat: s.bLat, lon: s.bLon });
+
+  if (flat.length === 1) {
+    const s = flat[0];
+    const asc = s.direction === 'ascend';
+    return {
+      start: asc ? nodeEnd(s, s.a) : nodeEnd(s, s.b),
+      end:   asc ? nodeEnd(s, s.b) : nodeEnd(s, s.a),
+      isLoop: false,
+      broken: false,
+    };
+  }
+
+  // Orient the first sector by its shared node with the second.
+  const s0 = flat[0];
+  const s1 = flat[1];
+  const shared = [s0.a, s0.b].find((n) => n === s1.a || n === s1.b);
+  let broken = shared === undefined;
+
+  const startId = broken
+    ? (s0.direction === 'ascend' ? s0.a : s0.b)
+    : (shared === s0.a ? s0.b : s0.a);
+  const start = nodeEnd(s0, startId);
+
+  // Walk sector by sector, carrying the running "far" node forward.
+  let cur = broken ? (startId === s0.a ? s0.b : s0.a) : shared;
+  for (let i = 1; i < flat.length; i++) {
+    const s = flat[i];
+    if (cur === s.a) cur = s.b;
+    else if (cur === s.b) cur = s.a;
+    else { broken = true; cur = s.direction === 'ascend' ? s.b : s.a; }
+  }
+  const end = nodeEnd(flat[flat.length - 1], cur);
+
+  return { start, end, isLoop: start.node === end.node, broken };
+}
+
+/** Traversal-start node of an ordered roads[] list. */
+function pathStartNode(roads) {
+  return pathEndpoints(roads)?.start.node ?? null;
+}
+
+/** Traversal-end node of an ordered roads[] list. */
+function pathEndNode(roads) {
+  return pathEndpoints(roads)?.end.node ?? null;
+}
+
+/**
+ * Reverse an ordered roads[] list:
+ *   (1) reverse roads order
+ *   (2) reverse road_sectors within each road
+ *   (3) flip each sector's direction ascend↔descend
+ * min/max_side_road_id are unchanged (they refer to road endpoint nodes, not path order).
+ */
+function reverseRoadsArr(roads) {
+  return [...roads].reverse().map((road) => ({
+    ...road,
+    road_sectors: [...(road.road_sectors || [])].reverse().map((s) => ({
+      ...s,
+      direction: s.direction === 'ascend' ? 'descend' : 'ascend',
+    })),
+  }));
+}
+
+/**
+ * True when an ordered roads[] list can be legally reversed: every one-way road
+ * must end up traversed in its legal ('ascend') direction after the flip, i.e.
+ * every one-way road is currently traversed 'descend'. In normal data one-way
+ * roads are always stored 'ascend', so any one-way road makes this false.
+ */
+function canReversePath(roads) {
+  return (roads || []).every((r) =>
+    !r.oneway || (r.road_sectors || []).every((s) => s.direction === 'descend'));
+}
+
 /**
  * Filter intersection_groups[trimKey] down to items that still sit on a surviving
  * road_sector (matched by road_id + coord_index) somewhere in `routes` under `trimKey`.
@@ -677,49 +791,60 @@ app.post('/api/routes/:relation_id/find-linkable', async (req, res) => {
       if (!seen.has(doc.relation_id)) { seen.add(doc.relation_id); allDocs.push(doc); }
     }
 
-    // Steps 3.2 + 3.3: filter to routes whose endpoint node matches
+    // Build a [lat,lon] polyline for an ordered roads[] list (respects direction).
+    const buildCoords = (roads) => {
+      const coords = [];
+      let prev = null;
+      for (const road of roads) {
+        for (const s of (road.road_sectors || [])) {
+          const [sLat, sLon, eLat, eLon] = s.direction === 'ascend'
+            ? [s.lat0, s.lon0, s.lat1, s.lon1]
+            : [s.lat1, s.lon1, s.lat0, s.lon0];
+          if (!prev || Math.abs(sLat - prev[0]) > 1e-7 || Math.abs(sLon - prev[1]) > 1e-7)
+            coords.push([sLat, sLon]);
+          coords.push([eLat, eLon]);
+          prev = [eLat, eLon];
+        }
+      }
+      return coords;
+    };
+
+    // Steps 3.2 + 3.3: filter to routes whose endpoint node matches.
+    //   direct  : our END ↔ their START, or our START ↔ their END (head-to-tail)
+    //   reverse : our END ↔ their END,   or our START ↔ their START (reverse route_b first)
+    // A same-type (reverse) match is only offered when route_b can be legally
+    // reversed. When a doc yields a direct match, its reverse matches are dropped.
     const results = [];
     for (const doc of allDocs) {
+      const perDoc = [];
+      let hasDirect = false;
       for (let pi = 0; pi < (doc.routes || []).length; pi++) {
         const roads = doc.routes[pi]?.roads || [];
         if (!roads.length) continue;
 
-        let matches = false;
-        if (endpoint_type === 'end') {
-          // Looking for a candidate whose START node == our END node_id
-          const s = roads[0]?.road_sectors?.[0];
-          if (s) {
-            const startNode = s.direction === 'ascend' ? s.min_node_id : s.max_node_id;
-            if (startNode === node_id) matches = true;
-          }
-        } else { // 'start'
-          // Looking for a candidate whose END node == our START node_id
-          const lastRoad = roads[roads.length - 1];
-          const lastSectors = lastRoad?.road_sectors || [];
-          const s = lastSectors[lastSectors.length - 1];
-          if (s) {
-            const endNode = s.direction === 'ascend' ? s.max_node_id : s.min_node_id;
-            if (endNode === node_id) matches = true;
-          }
-        }
+        const startNode = pathStartNode(roads);
+        const endNode = pathEndNode(roads);
+        const nearNode = endpoint_type === 'end' ? startNode : endNode; // direct
+        const farNode = endpoint_type === 'end' ? endNode : startNode;  // reverse
 
-        if (matches) {
-          // Build display coords
-          const coords = [];
-          let prev = null;
-          for (const road of roads) {
-            for (const s of (road.road_sectors || [])) {
-              const [sLat, sLon, eLat, eLon] = s.direction === 'ascend'
-                ? [s.lat0, s.lon0, s.lat1, s.lon1]
-                : [s.lat1, s.lon1, s.lat0, s.lon0];
-              if (!prev || Math.abs(sLat - prev[0]) > 1e-7 || Math.abs(sLon - prev[1]) > 1e-7)
-                coords.push([sLat, sLon]);
-              coords.push([eLat, eLon]);
-              prev = [eLat, eLon];
-            }
-          }
-          results.push({ relation_id: doc.relation_id, name: getPrimaryRouteName(doc), path_idx: pi, coords });
-        }
+        let reverse = null;
+        if (nearNode === node_id) reverse = false;
+        else if (farNode === node_id && canReversePath(roads)) reverse = true;
+        if (reverse === null) continue;
+
+        if (reverse === false) hasDirect = true;
+        const roadsForCoords = reverse ? reverseRoadsArr(roads) : roads;
+        perDoc.push({
+          relation_id: doc.relation_id,
+          name: getPrimaryRouteName(doc),
+          path_idx: pi,
+          reverse,
+          coords: buildCoords(roadsForCoords),
+        });
+      }
+      for (const c of perDoc) {
+        if (hasDirect && c.reverse) continue;
+        results.push(c);
       }
     }
     res.json(results);
@@ -731,13 +856,14 @@ app.post('/api/routes/:relation_id/find-linkable', async (req, res) => {
 
 /**
  * POST /api/routes/:relation_id/link
- * Body: { path_idx, endpoint_type, candidate_relation_id, candidate_path_idx }
+ * Body: { path_idx, endpoint_type, candidate_relation_id, candidate_path_idx, reverse }
  * Appends/prepends candidate path's roads to the original route's path.
+ * When `reverse` is true the candidate path is reversed first (start–start / end–end join).
  */
 app.post('/api/routes/:relation_id/link', async (req, res) => {
   try {
     const relation_id = parseInt(req.params.relation_id, 10);
-    const { path_idx, endpoint_type, candidate_relation_id, candidate_path_idx } = req.body;
+    const { path_idx, endpoint_type, candidate_relation_id, candidate_path_idx, reverse } = req.body;
 
     const col = osmDb.collection(ROUTES_COLLECTION);
     const [origDoc, candDoc] = await Promise.all([
@@ -747,8 +873,12 @@ app.post('/api/routes/:relation_id/link', async (req, res) => {
     if (!origDoc || !candDoc) return res.status(404).json({ error: 'Route not found' });
 
     const origRoads = [...((origDoc.routes[path_idx]?.roads) || [])];
-    const candRoads = [...((candDoc.routes[candidate_path_idx]?.roads) || [])];
+    let candRoads = [...((candDoc.routes[candidate_path_idx]?.roads) || [])];
     if (!origRoads.length || !candRoads.length) return res.status(400).json({ error: 'Empty roads' });
+    if (reverse) {
+      if (!canReversePath(candRoads)) return res.status(400).json({ error: 'Candidate path cannot be reversed' });
+      candRoads = reverseRoadsArr(candRoads);
+    }
 
     let newRoads;
     if (endpoint_type === 'end') {
@@ -866,7 +996,6 @@ app.get('/api/routes/:relation_id/endpoints', async (req, res) => {
     );
     if (!doc) return res.status(404).json({ error: 'Not found' });
 
-    const jpRoads = osmDb.collection('jproads');
     const endpoints = [];
 
     for (let i = 0; i < (doc.routes || []).length; i++) {
@@ -878,28 +1007,21 @@ app.get('/api/routes/:relation_id/endpoints', async (req, res) => {
 
       const firstRoad = pathRoads[0];
       const lastRoad = pathRoads[pathRoads.length - 1];
-      const firstSectors = firstRoad.road_sectors || [];
-      const lastSectors = lastRoad.road_sectors || [];
-      if (!firstSectors.length || !lastSectors.length) continue;
+      if (!(firstRoad.road_sectors || []).length || !(lastRoad.road_sectors || []).length) continue;
 
-      const firstDir = firstSectors[0].direction;
-      // Use min/max_node_id embedded in road_sectors (no jproads lookup needed)
-      const startNodeId = firstDir === 'ascend'
-        ? firstSectors[0].min_node_id
-        : firstSectors[0].max_node_id;
-      const startLat = firstDir === 'ascend' ? firstSectors[0].lat0 : firstSectors[0].lat1;
-      const startLon = firstDir === 'ascend' ? firstSectors[0].lon0 : firstSectors[0].lon1;
+      // Derive endpoints from sector node-connectivity, not a single sector's
+      // `direction` (which can be stale after extend/link – see pathEndpoints).
+      const ep = pathEndpoints(pathRoads);
+      if (!ep) continue;
+      if (ep.broken) {
+        console.warn(`/endpoints: relation ${relation_id} path ${i} has broken sector connectivity; endpoints may be approximate`);
+      }
 
-      const lastSector = lastSectors[lastSectors.length - 1];
-      const lastDir = lastSectors[0].direction;
-      const endNodeId = lastDir === 'ascend'
-        ? lastSector.max_node_id
-        : lastSector.min_node_id;
-      const endLat = lastDir === 'ascend' ? lastSector.lat1 : lastSector.lat0;
-      const endLon = lastDir === 'ascend' ? lastSector.lon1 : lastSector.lon0;
+      const hasOneway = pathRoads.some((r) => r.oneway);
+      const hasSubOneway = (doc.routes || []).filter((_, j) => j !== i).some((p) => (p.roads || []).some((r) => r.oneway));
 
-      endpoints.push({ path_idx: i, endpoint: 'start', lat: startLat, lon: startLon, node_id: startNodeId, road_id: parseInt(firstRoad.road_id, 10), has_oneway: pathRoads.some((r) => r.oneway), has_sub_oneway: (doc.routes || []).filter((_, j) => j !== i).some((p) => (p.roads || []).some((r) => r.oneway)) });
-      endpoints.push({ path_idx: i, endpoint: 'end',   lat: endLat,   lon: endLon,   node_id: endNodeId,   road_id: parseInt(lastRoad.road_id, 10),  has_oneway: pathRoads.some((r) => r.oneway), has_sub_oneway: (doc.routes || []).filter((_, j) => j !== i).some((p) => (p.roads || []).some((r) => r.oneway)) });
+      endpoints.push({ path_idx: i, endpoint: 'start', lat: ep.start.lat, lon: ep.start.lon, node_id: ep.start.node, road_id: parseInt(firstRoad.road_id, 10), has_oneway: hasOneway, has_sub_oneway: hasSubOneway });
+      endpoints.push({ path_idx: i, endpoint: 'end',   lat: ep.end.lat,   lon: ep.end.lon,   node_id: ep.end.node,   road_id: parseInt(lastRoad.road_id, 10),  has_oneway: hasOneway, has_sub_oneway: hasSubOneway });
     }
 
     res.json(endpoints);
@@ -969,9 +1091,10 @@ app.get('/api/roads/at-node', async (req, res) => {
         });
       }
 
-      // Entry from end → descending travel
-      // Includes one-way roads where the junction is at to_node: these trigger the
-      // special route-reversal case in the extend logic (see isSpecial in extend endpoint).
+      // Entry from end → descending travel.
+      // One-way roads whose junction is at to_node are still returned here (as a
+      // 'descend' arrow); the extend/link logic then drops them for the endpoint
+      // types where that would mean traversing the road against its arrow.
       if (isAtEnd && !isAtStart) {
         const n = coords.length;
         results.push({
@@ -1041,36 +1164,11 @@ app.post('/api/routes/:relation_id/extend', async (req, res) => {
 
       // ── Local helpers ────────────────────────────────────────────────────────
 
-      /** Traversal-start node of a path (first road, first sector). */
-      const getStartNode = (path) => {
-        const s = path.roads[0]?.road_sectors?.[0];
-        if (!s) return -1;
-        return s.direction === 'ascend' ? s.min_node_id : s.max_node_id;
-      };
+      /** Traversal-start node of a path (connectivity-based, see pathEndpoints). */
+      const getStartNode = (path) => pathEndpoints(path.roads)?.start.node ?? -1;
 
-      /** Traversal-end node of a path (last road, last sector). */
-      const getEndNode = (path) => {
-        const road = path.roads[path.roads.length - 1];
-        const s = road?.road_sectors?.[road.road_sectors.length - 1];
-        if (!s) return -1;
-        return s.direction === 'ascend' ? s.max_node_id : s.min_node_id;
-      };
-
-      /**
-       * Reverse roads array:
-       *   (1) reverse roads order
-       *   (2) reverse road_sectors within each road
-       *   (3) flip each sector's direction ascend↔descend
-       * min/max_side_road_id are unchanged (they refer to road endpoint nodes, not path order).
-       */
-      const reverseRoadsArr = (roads) =>
-        [...roads].reverse().map((road) => ({
-          ...road,
-          road_sectors: [...road.road_sectors].reverse().map((s) => ({
-            ...s,
-            direction: s.direction === 'ascend' ? 'descend' : 'ascend',
-          })),
-        }));
+      /** Traversal-end node of a path (connectivity-based, see pathEndpoints). */
+      const getEndNode = (path) => pathEndpoints(path.roads)?.end.node ?? -1;
 
       const flipDir = (dir) => (dir === 'ascend' ? 'descend' : 'ascend');
 
@@ -1092,8 +1190,7 @@ app.post('/api/routes/:relation_id/extend', async (req, res) => {
 
       // ── Sequential processing ────────────────────────────────────────────────
 
-      let curEpType = endpoint_type; // 'start' | 'end', may flip on special case
-      let reversedOccurred = false;
+      const curEpType = endpoint_type; // 'start' | 'end' – never changes (route_a is not reversed)
       const routes = doc.routes.map((p) => ({ ...p, roads: [...(p.roads || [])] }));
       const revIdx = routes.length === 2 ? (path_idx === 0 ? 1 : 0) : -1;
 
@@ -1104,40 +1201,19 @@ app.post('/api/routes/:relation_id/extend', async (req, res) => {
 
         const primPath = routes[path_idx];
         const node_id = curEpType === 'end' ? getEndNode(primPath) : getStartNode(primPath);
-        const hasOneway = primPath.roads.some((r) => r.oneway);
         const roadOneway = isForwardOnlyRoad(rdoc.oneway);
-        // Whether the reverse path already has any one-way road (makes reverse_roads invalid)
-        const hasSubOneway = revIdx >= 0 ? routes[revIdx].roads.some((r) => r.oneway) : false;
 
-        // Skip one-way roads that are physically invalid for has-oneway routes.
-        // The special route-reversal case only fires when !hasOneway && !hasSubOneway,
-        // so these combinations are invalid when either path already has a one-way road:
+        // route_a (the existing route) is NEVER reversed to fit a candidate.
+        // A one-way road that would have to be traversed against its arrow to
+        // attach here is therefore simply un-connectable and is skipped:
         //   'end'   + one-way + descend  (to_node=node_id  – can't depart backward)
         //   'start' + one-way + ascend   (from_node=node_id – can't arrive backward)
-        if ((hasOneway || hasSubOneway) && roadOneway && (
+        // One-way roads elsewhere in route_a / the reverse path do NOT matter –
+        // only this join's directional consistency does.
+        if (roadOneway && (
           (curEpType === 'end'   && pr.direction === 'descend') ||
           (curEpType === 'start' && pr.direction === 'ascend')
         )) continue;
-
-        // Special case: both paths are all-bidirectional AND the new road is one-way
-        // in the "wrong" direction.  Reverse both paths and flip endpoint_type.
-        //   'start' + direction='ascend' → from_node=node_id, one-way going AWAY → can't arrive
-        //   'end'   + direction='descend' → to_node=node_id, one-way going AWAY (backward) → can't depart
-        const isSpecial = !hasOneway && !hasSubOneway && roadOneway && (
-          (curEpType === 'start' && pr.direction === 'ascend') ||
-          (curEpType === 'end'   && pr.direction === 'descend')
-        );
-
-        if (isSpecial) {
-          // Reverse both paths so the "start" becomes "end" (or vice-versa),
-          // then switch to the opposite endpoint type for this road and all subsequent.
-          routes[path_idx] = { ...routes[path_idx], roads: reverseRoadsArr(routes[path_idx].roads) };
-          if (revIdx >= 0) {
-            routes[revIdx] = { ...routes[revIdx], roads: reverseRoadsArr(routes[revIdx].roads) };
-          }
-          curEpType = curEpType === 'start' ? 'end' : 'start';
-          reversedOccurred = true;
-        }
 
         // Build road item for primary path.
         // 'end' (append)  → use direction as-is (road departs from node_id)
@@ -1173,8 +1249,9 @@ app.post('/api/routes/:relation_id/extend', async (req, res) => {
           routes[path_idx] = { ...routes[path_idx], roads };
         }
 
-        // Apply to reverse path (bidirectional roads only; skipped after special case).
-        if (!isSpecial && revIdx >= 0 && !roadOneway) {
+        // Apply to reverse path (bidirectional roads only – a one-way road has no
+        // legal traversal in the opposite direction, so it stays on route_a only).
+        if (revIdx >= 0 && !roadOneway) {
           const revDir = flipDir(primDir);
           const revItem = makeItem(rdoc, revDir);
           if (revItem) {
@@ -1230,7 +1307,7 @@ app.post('/api/routes/:relation_id/extend', async (req, res) => {
       const $set = { routes: routesWithLoop, bbox, roads: allRoadsTop, updated_at };
       if (updatedGroups) $set.intersection_groups = updatedGroups;
       await col.updateOne({ relation_id }, { $set });
-      return res.json({ ok: true, endpoint_type_changed: reversedOccurred });
+      return res.json({ ok: true, endpoint_type_changed: false });
     }
 
     // ── Fallback: rebuild from scratch (for backward compatibility) ───────────

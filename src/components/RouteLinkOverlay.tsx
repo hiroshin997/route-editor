@@ -90,7 +90,7 @@ const RouteLinkOverlay: React.FC<RouteLinkOverlayProps> = ({
                         checked={selectedCandidateRelationId === c.relation_id}
                         onChange={() => onSelectCandidate(c.relation_id)}
                       />
-                      <span>{`${c.relation_id}: ${c.name}`}</span>
+                      <span>{`${c.relation_id}: ${c.name}`}{c.reverse ? '（逆向き接続）' : ''}</span>
                     </label>
                   ))}
                 </div>
