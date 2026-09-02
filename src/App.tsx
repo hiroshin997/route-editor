@@ -12,7 +12,7 @@ import IntersectionPanel from './components/IntersectionPanel';
 import { BBox, RouteDoc, RoutePolyline, EndpointInfo, RoadArrow, PendingRoadItem, ExtendModeState, TrimModeState, SectorTrimModeState, LinkModeState, LinkCandidate, Intersection, IntersectionModeState, DisplayIntersectionState, FromScratchState } from './types/route';
 import { computeBboxFromGeoJSON, computeRoutePolylines, flattenRoadSectors, rebuildRoadsFromSectorRange, sectorCount } from './utils/routeUtils';
 import { getNameVariations } from './utils/nameUtils';
-import { buildAddressPath, parseAddressPath } from './utils/addressPath';
+import { buildAddressPath, parseAddressPath, parseRouteQuery, buildRouteSearch } from './utils/addressPath';
 import './App.css';
 
 const DEFAULT_CENTER: [number, number] = [36.2048, 138.2529];
@@ -60,6 +60,47 @@ function filterValidArrows(
   });
 }
 
+/** Normalize a raw intersection: legacy `name: string` → `names: string[]`. */
+function normalizeIntersection(raw: any): Intersection {
+  return {
+    ...raw,
+    names: Array.isArray(raw.names) ? raw.names : raw.name != null ? [raw.name] : [],
+  };
+}
+
+/**
+ * Group keys of OTHER paths that must receive a mirrored copy of an intersection
+ * sitting on `road_id`: paths whose two-way (oneway === false) roads include that
+ * same road. Empty unless the clicked road is itself two-way.
+ */
+function siblingKeysForRoad(state: IntersectionModeState, road_id: number): string[] {
+  const road = state.roadItems.find((r: any) => r.road_id === road_id);
+  if (!road || road.oneway !== false) return [];
+  return Object.entries(state.twoWayRoadIdsByKey)
+    .filter(([key, ids]) => key !== state.groups_key && ids.includes(road_id))
+    .map(([key]) => key);
+}
+
+/**
+ * Rewrite every sibling-group copy of intersection `id` via `fn` (return `null`
+ * to drop it). Sibling groups that don't mirror `id` are left untouched.
+ */
+function mapMirroredIntersection(
+  siblingGroups: Record<string, Intersection[]>,
+  id: number,
+  fn: (i: Intersection) => Intersection | null,
+): Record<string, Intersection[]> {
+  const out: Record<string, Intersection[]> = {};
+  for (const [key, arr] of Object.entries(siblingGroups)) {
+    out[key] = arr.flatMap((it) => {
+      if (it.intersection_id !== id) return [it];
+      const next = fn(it);
+      return next ? [next] : [];
+    });
+  }
+  return out;
+}
+
 function App() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -91,6 +132,9 @@ function App() {
 
   // Refs for values needed inside callbacks without causing stale closures
   const latestRef  = useRef({ selections, zoom, mapCenter });
+  // Blocks the URL-sync effect until the initial mount parsing has run and
+  // written its own canonical URL.
+  const initializedRef = useRef(false);
   const cityBboxRef = useRef<BBox | null>(saved?.cityBbox ?? null);
   // Whether the deepest currently selected location's boundary doc has
   // properties.motorways_only === true (restricts fetchRoutes to highway_stat.motorway docs).
@@ -153,26 +197,50 @@ function App() {
     }
   };
 
-  const fetchRoutes = async (bbox: BBox): Promise<void> => {
+  const fetchRoutes = async (bbox: BBox): Promise<RoutePolyline[]> => {
     try {
       const params = `minLon=${bbox.minLon}&minLat=${bbox.minLat}&maxLon=${bbox.maxLon}&maxLat=${bbox.maxLat}&motorwaysOnly=${motorwaysOnlyRef.current}`;
       const res = await fetch(`/api/routes/in-bbox?${params}`);
       if (!res.ok) {
         setRoutePolylines([]);
-        return;
+        return [];
       }
       const docs: RouteDoc[] = await res.json();
       console.log('[App] fetchRoutes: received', docs.length, 'routes');
-      setRoutePolylines(computeRoutePolylines(docs, bbox));
+      const polylines = computeRoutePolylines(docs, bbox);
+      setRoutePolylines(polylines);
+      return polylines;
     } catch (e) {
       console.error('[App] fetchRoutes error:', e);
       setRoutePolylines([]);
+      return [];
     }
   };
 
   // ── Initialisation on mount ───────────────────────────────────────────────────
 
   useEffect(() => {
+    /**
+     * Applies the ?relation_id=&path= query against the freshly-fetched route
+     * list and selects the matching item in the right panel.
+     * Fallback rules:
+     *   - no relation_id, or no route with that relation_id  → ignore, return ''
+     *   - valid relation_id, path absent / invalid           → path 0
+     * Returns the canonical search string to put on the URL ('' when ignored).
+     */
+    const selectRouteFromQuery = (polylines: RoutePolyline[]): string => {
+      const { relation_id, path } = parseRouteQuery(location.search);
+      if (relation_id === null) return '';
+      const matches = polylines.filter((p) => p.relation_id === relation_id);
+      if (matches.length === 0) return '';
+      const atRequested =
+        path !== null ? matches.find((p) => (p.path_idx ?? 0) === path) : undefined;
+      const chosen =
+        atRequested ?? matches.find((p) => (p.path_idx ?? 0) === 0) ?? matches[0];
+      setSelectedIndex(chosen.index);
+      return buildRouteSearch(relation_id, chosen.path_idx ?? 0);
+    };
+
     const init = async () => {
       const level1Data = await fetchOptions(1, []);
       const urlSegments = parseAddressPath(location.pathname);
@@ -195,6 +263,10 @@ function App() {
 
         setSelections(matched);
 
+        // Resolved ?relation_id=&path= for the canonical URL. Stays '' (params
+        // dropped) unless both location_0/location_1 resolved AND the query
+        // points at a real route in the fetched list.
+        let routeSearch = '';
         if (matched.length > 0) {
           const geoData = await fetchPolygon(matched);
           if (matched.length >= 2 && geoData) {
@@ -202,7 +274,8 @@ function App() {
             if (bbox) {
               cityBboxRef.current = bbox;
               setCityBbox(bbox);
-              await fetchRoutes(bbox);
+              const polylines = await fetchRoutes(bbox);
+              routeSearch = selectRouteFromQuery(polylines);
             }
           }
         }
@@ -214,10 +287,11 @@ function App() {
           cityBbox: matched.length <= 2 ? undefined : cityBboxRef.current ?? undefined,
         });
 
-        // If some trailing segments didn't match, correct the URL to what was actually selected
-        const canonicalPath = buildAddressPath(matched);
-        if (canonicalPath !== location.pathname) {
-          navigate(canonicalPath, { replace: true });
+        // If some trailing segments didn't match, correct the URL to what was
+        // actually selected — including the normalised route query.
+        const canonicalUrl = buildAddressPath(matched) + routeSearch;
+        if (canonicalUrl !== location.pathname + location.search) {
+          navigate(canonicalUrl, { replace: true });
         }
         return;
       }
@@ -240,16 +314,38 @@ function App() {
         }
       }
 
-      // Keep the URL in sync with the restored selection
+      // Keep the URL in sync with the restored selection. A non-/address URL
+      // never carries a valid route query, so any ?relation_id=&path= is dropped.
       const canonicalPath = buildAddressPath(restoredSelections);
-      if (canonicalPath !== location.pathname) {
+      if (canonicalPath !== location.pathname || location.search) {
         navigate(canonicalPath, { replace: true });
       }
     };
 
-    init();
+    init().finally(() => {
+      initializedRef.current = true;
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Keep ?relation_id=&path= in sync with the route selected from the map view
+  // or the right panel. Runs only after the initial mount parsing has settled.
+  // The live URL (window.location) is read rather than the router's location so
+  // this never clobbers an in-flight /address/... path change from handleSelect.
+  useEffect(() => {
+    if (!initializedRef.current) return;
+    let targetSearch = '';
+    if (selectedIndex !== null) {
+      const rp = routePolylines.find((p) => p.index === selectedIndex);
+      if (rp?.relation_id !== undefined) {
+        targetSearch = buildRouteSearch(rp.relation_id, rp.path_idx ?? 0);
+      }
+    }
+    if (targetSearch !== window.location.search) {
+      navigate(window.location.pathname + targetSearch, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedIndex, routePolylines]);
 
   // ── Event handlers ────────────────────────────────────────────────────────────
 
@@ -597,27 +693,40 @@ function App() {
       originalGroups: {},
       allRoutesKeys: [],
       nextId: 999000000001,
+      siblingGroups: {},
+      twoWayRoadIdsByKey: {},
     });
     setPanelMode('intersection');
 
     try {
-      const [intRes, roadsRes] = await Promise.all([
-        fetch(`/api/routes/${relation_id}/intersections`),
-        fetch(`/api/routes/${relation_id}/roads?path_idx=${path_idx}`),
-      ]);
+      const intRes = await fetch(`/api/routes/${relation_id}/intersections`);
       const intData = await intRes.json();
-      const roadItems: any[] = await roadsRes.json();
-      console.log('[handleOpenIntersectionMode] intData=', intData, 'roadItems.length=', roadItems.length);
       const allRoutesKeys: (string | null)[] = intData.routes_keys ?? [];
+
+      // Roads for every path – needed to know which two-way roads are shared
+      // between paths so an intersection can be mirrored to sibling groups.
+      const roadsByPath: any[][] = await Promise.all(
+        allRoutesKeys.map((_, i) =>
+          fetch(`/api/routes/${relation_id}/roads?path_idx=${i}`).then((r) => r.json())
+        )
+      );
+      const roadItems: any[] = roadsByPath[path_idx] ?? [];
+
+      // key → road_id[] of oneway === false roads belonging to paths with that key
+      const twoWayRoadIdsByKey: Record<string, number[]> = {};
+      allRoutesKeys.forEach((rawKey, i) => {
+        if (rawKey == null) return;
+        const key = String(rawKey);
+        const set = twoWayRoadIdsByKey[key] ?? (twoWayRoadIdsByKey[key] = []);
+        for (const road of roadsByPath[i] ?? []) {
+          if (road?.oneway === false && !set.includes(road.road_id)) set.push(road.road_id);
+        }
+      });
+
+      console.log('[handleOpenIntersectionMode] intData=', intData, 'roadItems.length=', roadItems.length);
       const rawKey = allRoutesKeys[path_idx];
       const groups_key: string | null = rawKey != null ? String(rawKey) : null;
       const originalGroups: Record<string, Intersection[]> = intData.intersection_groups ?? {};
-      // Normalize legacy name: string → names: string[]
-      const normalizeIntersection = (raw: any): Intersection => ({
-        ...raw,
-        names: Array.isArray(raw.names) ? raw.names
-          : raw.name != null ? [raw.name] : [],
-      });
       const originalIntersections: Intersection[] = groups_key != null
         ? (originalGroups[groups_key] ?? []).map(normalizeIntersection) : [];
       console.log('[handleOpenIntersectionMode] groups_key=', groups_key, 'intersections=', originalIntersections.length);
@@ -626,6 +735,7 @@ function App() {
       setIntersectionMode({
         relation_id, path_idx, groups_key, originalIntersections,
         currentIntersections: [...originalIntersections], roadItems, originalGroups, allRoutesKeys, nextId,
+        siblingGroups: {}, twoWayRoadIdsByKey,
       });
     } catch (e) {
       console.error('[App] handleOpenIntersectionMode error:', e);
@@ -645,14 +755,16 @@ function App() {
     if (!intersectionMode) return;
     setIsIntersectionSaving(true);
     try {
-      const { relation_id, path_idx, groups_key, currentIntersections, originalGroups } = intersectionMode;
+      const { relation_id, path_idx, groups_key, currentIntersections, originalGroups, siblingGroups } = intersectionMode;
       const routes_key_updates: { path_idx: number; key: string }[] = [];
       let effectiveKey = groups_key;
       if (!effectiveKey) {
         effectiveKey = String(Object.keys(originalGroups).length);
         routes_key_updates.push({ path_idx, key: effectiveKey });
       }
-      const newGroups = { ...originalGroups, [effectiveKey]: currentIntersections };
+      // siblingGroups holds only the sibling paths mirrored into; the current
+      // path's own edits are applied last so they always win.
+      const newGroups = { ...originalGroups, ...siblingGroups, [effectiveKey]: currentIntersections };
       const res = await fetch(`/api/routes/${relation_id}/intersections`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -676,22 +788,46 @@ function App() {
       if (!prev) { console.log('[handleIntersectionAdd] intersectionMode is null!'); return prev; }
       const newItem: Intersection = { intersection_id: prev.nextId, names, ...snap, highway_tag };
       console.log('[handleIntersectionAdd] adding', newItem, 'total will be', prev.currentIntersections.length + 1);
-      return { ...prev, currentIntersections: [...prev.currentIntersections, newItem], nextId: prev.nextId + 1 };
+      // When the road is two-way and shared with another path, mirror the same
+      // intersection into that path's intersection group as well.
+      const siblingGroups = { ...prev.siblingGroups };
+      for (const key of siblingKeysForRoad(prev, snap.road_id)) {
+        const base = key in siblingGroups
+          ? siblingGroups[key]
+          : (prev.originalGroups[key] ?? []).map(normalizeIntersection);
+        siblingGroups[key] = base.some((i) => i.intersection_id === newItem.intersection_id)
+          ? base
+          : [...base, newItem];
+      }
+      return {
+        ...prev,
+        currentIntersections: [...prev.currentIntersections, newItem],
+        siblingGroups,
+        nextId: prev.nextId + 1,
+      };
     });
   };
 
   const handleIntersectionDelete = (id: number): void => {
     setIntersectionMode((prev) => {
       if (!prev) return prev;
-      return { ...prev, currentIntersections: prev.currentIntersections.filter((i) => i.intersection_id !== id) };
+      return {
+        ...prev,
+        currentIntersections: prev.currentIntersections.filter((i) => i.intersection_id !== id),
+        siblingGroups: mapMirroredIntersection(prev.siblingGroups, id, () => null),
+      };
     });
   };
 
   const handleIntersectionRename = (id: number, names: string[], highway_tag: string | null): void => {
     setIntersectionMode((prev) => {
       if (!prev) return prev;
-      return { ...prev, currentIntersections: prev.currentIntersections.map((i) =>
-        i.intersection_id === id ? { ...i, names, highway_tag } : i) };
+      return {
+        ...prev,
+        currentIntersections: prev.currentIntersections.map((i) =>
+          i.intersection_id === id ? { ...i, names, highway_tag } : i),
+        siblingGroups: mapMirroredIntersection(prev.siblingGroups, id, (i) => ({ ...i, names, highway_tag })),
+      };
     });
   };
 
@@ -701,8 +837,13 @@ function App() {
   ): void => {
     setIntersectionMode((prev) => {
       if (!prev) return prev;
-      return { ...prev, currentIntersections: prev.currentIntersections.map((i) =>
-        i.intersection_id === id ? { ...i, ...snap } : i) };
+      // Keep any mirrored copies in sync with the moved position/road.
+      return {
+        ...prev,
+        currentIntersections: prev.currentIntersections.map((i) =>
+          i.intersection_id === id ? { ...i, ...snap } : i),
+        siblingGroups: mapMirroredIntersection(prev.siblingGroups, id, (i) => ({ ...i, ...snap })),
+      };
     });
   };
 

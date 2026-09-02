@@ -65,6 +65,18 @@ export interface IntersectionModeState {
   originalGroups: Record<string, Intersection[]>;  // full intersection_groups for save
   allRoutesKeys: (string | null)[];  // routes[i].intersection_group_key
   nextId: number;                    // next id to assign (>= 999000000001)
+  /**
+   * Working copies of OTHER paths' intersection groups, keyed by
+   * intersection_group_key. Only keys that have actually been mirrored into are
+   * present. Merged into intersection_groups on save.
+   */
+  siblingGroups: Record<string, Intersection[]>;
+  /**
+   * group key → road_id[] of the two-way (oneway === false) roads that belong to
+   * the path(s) using that key. Used to decide which sibling groups an
+   * intersection must be mirrored into.
+   */
+  twoWayRoadIdsByKey: Record<string, number[]>;
 }
 
 export interface DisplayIntersectionState {
