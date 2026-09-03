@@ -4,6 +4,7 @@ import OpenWithIcon from '@mui/icons-material/OpenWith';
 import ContentCutIcon from '@mui/icons-material/ContentCut';
 import LinkIcon from '@mui/icons-material/Link';
 import TrafficIcon from '@mui/icons-material/Traffic';
+import MergeIcon from '@mui/icons-material/Merge';
 import LoopIcon from '@mui/icons-material/Loop';
 import { RoutePolyline } from '../types/route';
 
@@ -31,6 +32,7 @@ interface RoutePanelProps {
   linkingRelationId?: number;
   onIntersectionRoute: (relation_id: number, path_idx: number) => void;
   intersectionRelationId?: number;
+  onCoupleRoute: (relation_id: number) => void;
 }
 
 const RoutePanel: React.FC<RoutePanelProps> = ({
@@ -52,15 +54,61 @@ const RoutePanel: React.FC<RoutePanelProps> = ({
   linkingRelationId,
   onIntersectionRoute,
   intersectionRelationId,
+  onCoupleRoute,
 }) => {
   const newRouteEnabled = citySelected && zoom >= 10;
+  // relation_id → number of paths currently listed for that route. A route with
+  // two paths can't be coupled again, so its MergeIcon is disabled.
+  const pathCountByRelation = new Map<number, number>();
+  for (const rp of routePolylines) {
+    if (rp.relation_id === undefined) continue;
+    pathCountByRelation.set(rp.relation_id, (pathCountByRelation.get(rp.relation_id) ?? 0) + 1);
+  }
   const scrollRef = useRef<HTMLDivElement>(null);
+  const selectedItemRef = useRef<HTMLDivElement>(null);
+  // Tracks the selection we last auto-scrolled to, so a manual scroll away from
+  // an unchanged selection isn't yanked back on every re-render.
+  const scrolledToIndexRef = useRef<number | null>(null);
 
   useEffect(() => {
-    if (scrollRef.current) {
+    // Restore the previous scroll position on (re)mount — but not when a route is
+    // already selected: the effect below owns scrolling to that row (e.g. right
+    // after a "new route" save, which remounts this panel then selects path 0).
+    if (scrollRef.current && selectedIndex === null) {
       scrollRef.current.scrollTop = savedScrollTop;
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Scroll the selected route into view when the selection changes — covers
+  // picking a route on the map, landing on a /address/..?relation_id=&path= deep
+  // link, and the freshly-created route after [new route] save. In that last
+  // case the panel has just remounted and the route list is still settling, so
+  // the target row may not be in the DOM on the commit the selection lands —
+  // retry over the next few frames until it's there.
+  useEffect(() => {
+    if (selectedIndex === null) {
+      scrolledToIndexRef.current = null;
+      return;
+    }
+    if (selectedIndex === scrolledToIndexRef.current) return;
+
+    let raf = 0;
+    const attempt = (tries: number) => {
+      const el =
+        selectedItemRef.current ??
+        scrollRef.current?.querySelector<HTMLElement>('[data-route-selected="true"]') ??
+        null;
+      if (el) {
+        el.scrollIntoView({ block: 'nearest' });
+        scrolledToIndexRef.current = selectedIndex;
+      } else if (tries < 10) {
+        raf = requestAnimationFrame(() => attempt(tries + 1));
+      }
+    };
+    attempt(0);
+    return () => { if (raf) cancelAnimationFrame(raf); };
+  }, [selectedIndex, routePolylines]);
 
   return (
     <div
@@ -86,6 +134,8 @@ const RoutePanel: React.FC<RoutePanelProps> = ({
           return (
             <div
               key={rp.index}
+              ref={rp.index === selectedIndex ? selectedItemRef : undefined}
+              data-route-selected={rp.index === selectedIndex ? 'true' : undefined}
               className={`route-panel-item${isActive ? ' route-panel-item--active' : ''}`}
               onClick={() => onSelect(rp.index)}
             >
@@ -140,6 +190,16 @@ const RoutePanel: React.FC<RoutePanelProps> = ({
                     onClick={(e) => { e.stopPropagation(); onIntersectionRoute(rp.relation_id!, rp.path_idx ?? 0); }}
                   >
                     <TrafficIcon fontSize="small" />
+                  </button>
+                  <button
+                    className="route-panel-edit-btn route-panel-merge-btn"
+                    title={(pathCountByRelation.get(rp.relation_id!) ?? 1) >= 2
+                      ? 'このルートは既に2つのパスを持っています'
+                      : 'ルートをカップリング'}
+                    disabled={(pathCountByRelation.get(rp.relation_id!) ?? 1) >= 2}
+                    onClick={(e) => { e.stopPropagation(); onCoupleRoute(rp.relation_id!); }}
+                  >
+                    <MergeIcon fontSize="small" />
                   </button>
                 </>
               )}

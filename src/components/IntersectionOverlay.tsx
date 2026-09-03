@@ -74,10 +74,12 @@ const HIGHWAY_TAG_OPTIONS: { value: string; label: string }[] = [
 type CtxMenu =
   | { type: 'polyline'; x: number; y: number; lat: number; lon: number; snapResult: { road_id: number; coord_index: number; lat: number; lon: number } }
   | { type: 'marker';   x: number; y: number; lat: number; lon: number; intersection: Intersection }
+  | { type: 'quick-add'; x: number; y: number; lat: number; lon: number }
   | null;
 
 type Dialog =
   | { type: 'add-name';   snapResult: { road_id: number; coord_index: number; lat: number; lon: number } }
+  | { type: 'quick-add';  lat: number; lon: number }
   | { type: 'rename';     intersection: Intersection }
   | { type: 'delete';     intersection: Intersection }
   | null;
@@ -90,6 +92,12 @@ export interface IntersectionOverlayProps {
   isEditMode: boolean;
   roadItems: any[];
   onAdd: (snap: { road_id: number; coord_index: number; lat: number; lon: number }, names: string[], highway_tag: string | null) => void;
+  /**
+   * Quick-add used when a route is only selected (not in the right-panel
+   * editor): persists one intersection to the DB straight away. Resolves once
+   * the write has completed so the dialog stays open until then.
+   */
+  onQuickAdd?: (lat: number, lon: number, names: string[], highway_tag: string | null) => void | Promise<void>;
   onDelete: (id: number) => void;
   onRename: (id: number, names: string[], highway_tag: string | null) => void;
   onMove: (id: number, snap: { road_id: number; coord_index: number; lat: number; lon: number }) => void;
@@ -101,6 +109,7 @@ const IntersectionOverlay: React.FC<IntersectionOverlayProps> = ({
   isEditMode,
   roadItems,
   onAdd,
+  onQuickAdd,
   onDelete,
   onRename,
   onMove,
@@ -112,7 +121,15 @@ const IntersectionOverlay: React.FC<IntersectionOverlayProps> = ({
   // entries for rename dialog: list of name strings
   const [renameEntries, setRenameEntries] = useState<string[]>([]);
   const [highwayTagInput, setHighwayTagInput] = useState('');
+  const [isSavingQuickAdd, setIsSavingQuickAdd] = useState(false);
+  // "about this road" highlight (quick-add menu, mirrors MapContextMenu)
+  const [thisRoad, setThisRoad] = useState<{ coords: [number, number][]; road_id: number; lat: number; lon: number } | null>(null);
+  const [isFetchingRoad, setIsFetchingRoad] = useState(false);
   const nameInputRef = useRef<HTMLInputElement>(null);
+
+  // Quick-add: right-click the route to add & persist one intersection while the
+  // route is only selected (no right-panel editor open).
+  const quickAddEnabled = !isEditMode && !!onQuickAdd && !!routePolyline;
 
   console.log('[IntersectionOverlay] render: intersections=', intersections.length, 'isEditMode=', isEditMode);
   // Log positions of first 3 intersections to verify lat/lon
@@ -121,8 +138,8 @@ const IntersectionOverlay: React.FC<IntersectionOverlayProps> = ({
       intersections.slice(0, 3).map((i) => ({ id: i.intersection_id, lat: i.lat, lon: i.lon, names: i.names })));
   }
 
-  // Close context menu on map click
-  useMapEvents({ click: () => setCtxMenu(null) });
+  // Close context menu (and clear the "about this road" highlight) on map click
+  useMapEvents({ click: () => { setCtxMenu(null); setThisRoad(null); } });
 
   const openDialog = useCallback((d: Dialog, initialName = '') => {
     setDialog(d);
@@ -164,7 +181,52 @@ const IntersectionOverlay: React.FC<IntersectionOverlayProps> = ({
     }
   }, [isEditMode, roadItems, map]);
 
+  // ── Polyline right-click (quick-add, route only selected) ─────────────────────
+
+  const handlePolylineContextMenuQuick = useCallback((e: any) => {
+    if (!quickAddEnabled) return;
+    e.originalEvent.preventDefault();
+    L.DomEvent.stopPropagation(e);
+    const pt = map.latLngToContainerPoint(e.latlng);
+    setCtxMenu({ type: 'quick-add', x: pt.x, y: pt.y, lat: e.latlng.lat, lon: e.latlng.lng });
+  }, [quickAddEnabled, map]);
+
   // ── Context menu actions ─────────────────────────────────────────────────────
+
+  const handleCtxQuickAdd = () => {
+    if (ctxMenu?.type !== 'quick-add') return;
+    const { lat, lon } = ctxMenu;
+    setCtxMenu(null);
+    setDialog({ type: 'quick-add', lat, lon });
+    setNameInput('');
+    setHighwayTagInput('');
+    setTimeout(() => nameInputRef.current?.focus(), 50);
+  };
+
+  // "about this road" – highlight the nearest OSM road (mirrors MapContextMenu).
+  const handleCtxThisRoad = async () => {
+    if (ctxMenu?.type !== 'quick-add' || isFetchingRoad) return;
+    const { lat, lon } = ctxMenu;
+    setCtxMenu(null);
+    setIsFetchingRoad(true);
+    try {
+      const bounds = map.getBounds();
+      const params = new URLSearchParams({
+        lat: String(lat), lon: String(lon),
+        minLon: String(bounds.getWest()), minLat: String(bounds.getSouth()),
+        maxLon: String(bounds.getEast()), maxLat: String(bounds.getNorth()),
+      });
+      const res = await fetch(`/api/roads/nearest?${params}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      if (!data) return;
+      // API returns coords as [[lon, lat], ...]; convert to [lat, lon] for Leaflet
+      const coords: [number, number][] = (data.coords as number[][]).map(([lo, la]) => [la, lo]);
+      setThisRoad({ coords, road_id: data.road_id, lat, lon });
+    } finally {
+      setIsFetchingRoad(false);
+    }
+  };
 
   const handleCtxAdd = () => {
     console.log('[handleCtxAdd] ctxMenu=', ctxMenu);
@@ -193,11 +255,20 @@ const IntersectionOverlay: React.FC<IntersectionOverlayProps> = ({
 
   // ── Dialog confirms ──────────────────────────────────────────────────────────
 
-  const handleDialogOk = () => {
+  const handleDialogOk = async () => {
     console.log('[handleDialogOk] called, dialog=', dialog, 'nameInput=', nameInput);
     if (!dialog) return;
     if (dialog.type === 'add-name') {
       onAdd(dialog.snapResult, getNameVariations(nameInput), highwayTagInput || null);
+    } else if (dialog.type === 'quick-add') {
+      if (isSavingQuickAdd || !nameInput.trim()) return;
+      setIsSavingQuickAdd(true);
+      try {
+        // Persist to the DB first, then close the modal.
+        await onQuickAdd?.(dialog.lat, dialog.lon, getNameVariations(nameInput), highwayTagInput || null);
+      } finally {
+        setIsSavingQuickAdd(false);
+      }
     } else if (dialog.type === 'rename') {
       const clean = renameEntries.filter((s) => s.trim());
       if (clean.length > 0) onRename(dialog.intersection.intersection_id, clean, highwayTagInput || null);
@@ -221,13 +292,33 @@ const IntersectionOverlay: React.FC<IntersectionOverlayProps> = ({
 
   return (
     <>
-      {/* Invisible thick polyline for right-click detection in edit mode */}
-      {isEditMode && routePolyline && routePolyline.coords.length > 0 && (
+      {/* Invisible thick polyline for right-click detection – edit mode adds the
+          full intersection context menu; a plain selected route gets quick-add. */}
+      {(isEditMode || quickAddEnabled) && routePolyline && routePolyline.coords.length > 0 && (
         <Polyline
           positions={routePolyline.coords}
           pathOptions={{ color: 'transparent', weight: 20, opacity: 0.01 }}
-          eventHandlers={{ contextmenu: handlePolylineContextMenu }}
+          eventHandlers={{ contextmenu: isEditMode ? handlePolylineContextMenu : handlePolylineContextMenuQuick }}
         />
+      )}
+
+      {/* "about this road" highlight – blue dotted blinking line + road_id label */}
+      {thisRoad && (
+        <>
+          <Polyline
+            positions={thisRoad.coords}
+            pathOptions={{ color: '#2563eb', weight: 4, dashArray: '10 6', className: 'this-road-line' }}
+          />
+          <Marker
+            position={[thisRoad.lat, thisRoad.lon]}
+            icon={L.divIcon({
+              className: '',
+              html: `<div class="this-road-label"><a href="https://www.openstreetmap.org/way/${thisRoad.road_id}" target="_blank" rel="noreferrer">road_id: ${thisRoad.road_id}</a></div>`,
+              iconSize: [0, 0],
+              iconAnchor: [0, 0],
+            })}
+          />
+        </>
       )}
 
       {/* Intersection markers */}
@@ -267,6 +358,12 @@ const IntersectionOverlay: React.FC<IntersectionOverlayProps> = ({
           ref={(el) => { if (el) L.DomEvent.disableClickPropagation(el); }}
           onContextMenu={(e) => e.preventDefault()}
         >
+          {ctxMenu.type === 'quick-add' && (
+            <>
+              <div className="ctx-menu-item" onClick={handleCtxQuickAdd}>交差点の追加</div>
+              <div className="ctx-menu-item" onClick={handleCtxThisRoad}>about this road</div>
+            </>
+          )}
           {ctxMenu.type === 'polyline' && (
             <div className="ctx-menu-item" onClick={() => {
               console.log('[ctx-menu] 交差点の追加 clicked, snapResult=', ctxMenu.type === 'polyline' ? ctxMenu.snapResult : null);
@@ -299,7 +396,7 @@ const IntersectionOverlay: React.FC<IntersectionOverlayProps> = ({
       {dialog && ReactDOM.createPortal(
         <div
           className="intersection-dialog-backdrop"
-          onClick={(e) => { if (e.target === e.currentTarget) handleDialogCancel(); }}
+          onClick={(e) => { if (e.target === e.currentTarget && !isSavingQuickAdd) handleDialogCancel(); }}
         >
           <div className="intersection-dialog" onClick={(e) => e.stopPropagation()}>
             {dialog.type === 'delete' ? (
@@ -382,7 +479,11 @@ const IntersectionOverlay: React.FC<IntersectionOverlayProps> = ({
                   ))}
                 </select>
                 <div className="intersection-dialog-buttons">
-                  <button className="intersection-dialog-ok" onClick={handleDialogOk}>OK</button>
+                  <button
+                    className="intersection-dialog-ok"
+                    disabled={dialog.type === 'quick-add' && (isSavingQuickAdd || !nameInput.trim())}
+                    onClick={handleDialogOk}
+                  >OK</button>
                   <button className="intersection-dialog-cancel" onClick={handleDialogCancel}>Cancel</button>
                 </div>
               </>

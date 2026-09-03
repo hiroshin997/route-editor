@@ -486,6 +486,10 @@ body,
 .route-panel-sector-trim-btn { color: #888; }
 .route-panel-sector-trim-btn--active { color: #f97316 !important; }
 
+/* ── Route panel couple (merge) button ─────────────────────────────────────── */
+.route-panel-merge-btn { color: #888; }
+.route-panel-merge-btn:disabled { color: #d1d5db; cursor: not-allowed; background: none; }
+
 /* ── SectorTrimOverlay scissors marker ──────────────────────────────────────── */
 .sector-scissors-icon { background: none !important; border: none !important; cursor: pointer; }
 
@@ -1003,5 +1007,32 @@ body,
 
 .names-modal-cancel-btn:hover {
   background: #d1d5db;
+}
+
+/* ── CoupleRouteModal ───────────────────────────────────────────────────────── */
+.couple-modal-list {
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.couple-modal-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 2px;
+  font-size: 13px;
+  color: #333;
+  cursor: pointer;
+}
+
+.couple-modal-row:hover {
+  background: #f0faf9;
+}
+
+.couple-modal-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 

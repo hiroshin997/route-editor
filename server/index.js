@@ -529,6 +529,120 @@ app.put('/api/routes/:relation_id/intersections', async (req, res) => {
   }
 });
 
+/**
+ * POST /api/routes/:relation_id/intersections/point
+ * Body: { path_idx, lat, lon, names, highway_tag }
+ *
+ * Snaps (lat, lon) onto routes[path_idx]'s saved road_sectors, appends a single
+ * intersection item to that path's intersection group (creating the group key
+ * when the path has none), bumps updated_at, and persists immediately.
+ *
+ * Backs the "交差点の追加" map context-menu shown while a route is merely
+ * selected (not the right-panel intersection editor, which still batches its
+ * edits through the PUT handler above).
+ */
+app.post('/api/routes/:relation_id/intersections/point', async (req, res) => {
+  try {
+    const relation_id = parseInt(req.params.relation_id, 10);
+    const path_idx = parseInt(req.body.path_idx, 10);
+    const lat = parseFloat(req.body.lat);
+    const lon = parseFloat(req.body.lon);
+    const { names, highway_tag } = req.body;
+    if (isNaN(relation_id) || isNaN(path_idx) || isNaN(lat) || isNaN(lon)) {
+      return res.status(400).json({ error: 'relation_id, path_idx, lat, lon required' });
+    }
+    if (!Array.isArray(names) || !names.some((n) => String(n).trim())) {
+      return res.status(400).json({ error: 'names array required' });
+    }
+
+    const col = osmDb.collection(ROUTES_COLLECTION);
+    const doc = await col.findOne({ relation_id }, { projection: { routes: 1, intersection_groups: 1, _id: 0 } });
+    if (!doc) return res.status(404).json({ error: 'Not found' });
+
+    const path = (doc.routes || [])[path_idx];
+    if (!path) return res.status(404).json({ error: 'Path not found' });
+
+    // Resolve road_id / coord_index from the real saved geometry.
+    const sectors = [];
+    for (const r of (path.roads || [])) {
+      for (const s of (r.road_sectors || [])) {
+        sectors.push({
+          road_id: Number(r.road_id),
+          coord_index: s.coord_index,
+          lat0: s.lat0, lon0: s.lon0, lat1: s.lat1, lon1: s.lon1,
+        });
+      }
+    }
+    const snap = snapPointToSectors(lat, lon, sectors);
+    if (!snap) return res.status(400).json({ error: 'Could not snap point to route geometry' });
+
+    const groups = { ...(doc.intersection_groups || {}) };
+
+    // Resolve (or lazily create) this path's intersection group key.
+    const $set = {};
+    let key = path.intersection_group_key;
+    if (key == null) {
+      key = String(Object.keys(groups).length);
+      $set[`routes.${path_idx}.intersection_group_key`] = parseInt(key);
+    } else {
+      key = String(key);
+    }
+
+    // Manually-added intersection ids live at/above 999000000001 (matches the editor).
+    const allIds = Object.values(groups).flat()
+      .map((i) => Number(i.intersection_id)).filter((n) => !isNaN(n));
+    const intersection_id = Math.max(999000000000, ...allIds) + 1;
+
+    const newItem = {
+      intersection_id,
+      names,
+      road_id: snap.road_id,
+      coord_index: snap.coord_index,
+      lat: snap.lat,
+      lon: snap.lon,
+      highway_tag: highway_tag || null,
+    };
+    groups[key] = [...(groups[key] || []), newItem];
+
+    // When the snapped road is two-way (oneway === false) and the SAME road also
+    // appears on another path of this route, mirror the intersection into that
+    // path's intersection group as well. Mirrors the right-panel editor's
+    // siblingKeysForRoad / handleIntersectionAdd behaviour (App.tsx), which is
+    // otherwise skipped on the direct "交差点の追加" context-menu path.
+    const clickedRoad = (path.roads || [])
+      .find((r) => Number(r.road_id) === Number(snap.road_id));
+    if (clickedRoad && clickedRoad.oneway === false) {
+      (doc.routes || []).forEach((p, i) => {
+        if (i === path_idx) return;
+        const sibKeyRaw = p?.intersection_group_key;
+        if (sibKeyRaw == null) return;         // sibling path has no group yet
+        const sibKey = String(sibKeyRaw);
+        if (sibKey === key) return;            // shares the current path's group
+        const sharesTwoWayRoad = (p.roads || []).some((r) =>
+          Number(r.road_id) === Number(snap.road_id) && r.oneway === false);
+        if (!sharesTwoWayRoad) return;
+        const arr = groups[sibKey] || [];
+        if (!arr.some((it) => Number(it.intersection_id) === intersection_id)) {
+          groups[sibKey] = [...arr, newItem];
+        }
+      });
+    }
+
+    const pad = (n) => String(n).padStart(2, '0');
+    const jst = new Date(Date.now() + 9 * 3600 * 1000);
+    const updated_at = `${jst.getUTCFullYear()}-${pad(jst.getUTCMonth()+1)}-${pad(jst.getUTCDate())}T${pad(jst.getUTCHours())}:${pad(jst.getUTCMinutes())}:${pad(jst.getUTCSeconds())}+09:00`;
+
+    $set.intersection_groups = groups;
+    $set.updated_at = updated_at;
+
+    await col.updateOne({ relation_id }, { $set });
+    res.json({ ok: true, intersection: newItem, groups_key: key });
+  } catch (err) {
+    console.error('/api/routes/:id/intersections/point error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Route trim endpoints ───────────────────────────────────────────────────────
 
 function computeBboxFromPaths(routes) {
@@ -928,6 +1042,90 @@ app.post('/api/routes/:relation_id/link', async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     console.error('/api/routes/:id/link error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Route couple (pairing) endpoint ───────────────────────────────────────────
+
+/**
+ * POST /api/routes/:relation_id/couple
+ * Body: { target_relation_id }
+ *
+ * Pairs two single-path routes into one two-path route:
+ *   - target.routes[0]                → appended as this route's routes[1]
+ *   - target.intersection_groups["0"] → appended to this route's intersection_groups["1"]
+ *   - the appended path gets intersection_group_key === "1"
+ *   - the target route document is deleted from jproad_routes
+ * bbox / updated_at / top-level roads[] / is_loop flags are refreshed the same
+ * way the /link endpoint does.
+ */
+app.post('/api/routes/:relation_id/couple', async (req, res) => {
+  try {
+    const relation_id = parseInt(req.params.relation_id, 10);
+    const target_relation_id = parseInt(req.body.target_relation_id, 10);
+    if (isNaN(relation_id) || isNaN(target_relation_id)) {
+      return res.status(400).json({ error: 'relation_id and target_relation_id required' });
+    }
+    if (relation_id === target_relation_id) {
+      return res.status(400).json({ error: 'Cannot couple a route with itself' });
+    }
+
+    const col = osmDb.collection(ROUTES_COLLECTION);
+    const [origDoc, targetDoc] = await Promise.all([
+      col.findOne({ relation_id }, { projection: { routes: 1, intersection_groups: 1, roads: 1, _id: 0 } }),
+      col.findOne({ relation_id: target_relation_id }, { projection: { routes: 1, intersection_groups: 1, _id: 0 } }),
+    ]);
+    if (!origDoc || !targetDoc) return res.status(404).json({ error: 'Route not found' });
+
+    const origRoutes = origDoc.routes || [];
+    const targetRoutes = targetDoc.routes || [];
+    if (origRoutes.length !== 1) {
+      return res.status(400).json({ error: 'Origin route must have exactly one path' });
+    }
+    if (targetRoutes.length !== 1) {
+      return res.status(400).json({ error: 'Target route must have exactly one path' });
+    }
+
+    // 3.1 – append target.routes[0] as routes[1]; 3.3 – its key becomes "1".
+    const addedPath = { ...targetRoutes[0], intersection_group_key: '1' };
+    const newRoutes = applyIsLoopFlags([
+      { ...origRoutes[0], intersection_group_key: '0' },
+      addedPath,
+    ]);
+
+    // 3.2 – append target.intersection_groups["0"] into this route's group "1".
+    const origGroups = origDoc.intersection_groups || {};
+    const targetGroups = targetDoc.intersection_groups || {};
+    const newGroups = { ...origGroups };
+    newGroups['0'] = origGroups['0'] || [];
+    newGroups['1'] = [...(origGroups['1'] || []), ...(targetGroups['0'] || [])];
+
+    // Merge top-level roads[] with any new road_ids from the added path.
+    const existingIds = new Set((origDoc.roads || []).map((r) => Number(r.road_id)));
+    const newRoads = [
+      ...(origDoc.roads || []),
+      ...(addedPath.roads || [])
+        .filter((r) => !existingIds.has(Number(r.road_id)))
+        .map((r) => ({ road_id: r.road_id, role: '' })),
+    ];
+
+    const bbox = computeBboxFromPaths(newRoutes);
+
+    const pad = (n) => String(n).padStart(2, '0');
+    const jst = new Date(Date.now() + 9 * 3600 * 1000);
+    const updated_at = `${jst.getUTCFullYear()}-${pad(jst.getUTCMonth()+1)}-${pad(jst.getUTCDate())}T${pad(jst.getUTCHours())}:${pad(jst.getUTCMinutes())}:${pad(jst.getUTCSeconds())}+09:00`;
+
+    await col.updateOne(
+      { relation_id },
+      { $set: { routes: newRoutes, intersection_groups: newGroups, roads: newRoads, bbox, updated_at } }
+    );
+    // 3.4 – remove the target route document.
+    await col.deleteOne({ relation_id: target_relation_id });
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('/api/routes/:id/couple error:', err);
     res.status(500).json({ error: err.message });
   }
 });

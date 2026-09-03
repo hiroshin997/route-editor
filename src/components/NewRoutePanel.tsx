@@ -25,8 +25,9 @@ interface NewRoutePanelProps {
   onPreviewRoutes: (routes: RoutePolyline[]) => void;
   /** Called when user selects an existing route (3.4): highlight it and close */
   onExistingRouteSelect: (index: number) => void;
-  /** Called after a road-name-based route is saved; triggers route list reload */
-  onSaved: () => void;
+  /** Called after a road-name-based route is saved; triggers route list reload.
+   *  Receives the new route's relation_id so the caller can select/focus it. */
+  onSaved: (relation_id: number) => void;
   /** Called when [from scratch] button is clicked */
   onEnterScratch: (query: string) => void;
   /** Called when [cancel] is clicked in scratch mode */
@@ -134,13 +135,14 @@ const NewRoutePanel: React.FC<NewRoutePanelProps> = ({
     if (!previewData) return;
     setIsSaving(true);
     try {
-      await fetch('/api/routes/save', {
+      const res = await fetch('/api/routes/save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(previewData),
       });
+      const { relation_id } = await res.json();
       onPreviewRoutes([]);
-      onSaved();
+      onSaved(relation_id);
       onClose();
     } catch (e) {
       console.error('[NewRoutePanel] save error:', e);

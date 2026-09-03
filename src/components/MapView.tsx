@@ -88,6 +88,44 @@ interface MapControllerProps {
   onCenterChange: (center: [number, number]) => void;
 }
 
+/** A request to fly the map to a specific route path. `nonce` makes repeat
+ *  focus requests for the same route distinct. */
+export interface FocusRouteRequest {
+  relation_id: number;
+  path_idx: number;
+  nonce: number;
+}
+
+interface RouteFocuserProps {
+  routePolylines: RoutePolyline[];
+  focusRoute: FocusRouteRequest | null;
+}
+
+/**
+ * Flies the map to a route path's bounds when a new `focusRoute` request comes
+ * in — used right after a route is created so the map lands on its path 0.
+ */
+const RouteFocuser: React.FC<RouteFocuserProps> = ({ routePolylines, focusRoute }) => {
+  const map = useMap();
+  const lastNonceRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!focusRoute || focusRoute.nonce === lastNonceRef.current) return;
+    const rp = routePolylines.find(
+      (p) => p.relation_id === focusRoute.relation_id && (p.path_idx ?? 0) === focusRoute.path_idx,
+    );
+    if (!rp || rp.coords.length === 0) return;
+    lastNonceRef.current = focusRoute.nonce;
+    const bounds = L.latLngBounds(rp.coords);
+    if (!bounds.isValid()) return;
+    const size = map.getSize();
+    const padding: [number, number] = [size.x * 0.15, size.y * 0.15];
+    map.flyToBounds(bounds, { padding, duration: 1 });
+  }, [focusRoute, routePolylines, map]);
+
+  return null;
+};
+
 /**
  * Inner component that accesses the Leaflet map instance.
  * Synchronises zoom from parent and reports user-driven zoom/move back up.
@@ -193,6 +231,7 @@ interface MapViewProps {
   onDismissLinkModal: RouteLinkOverlayProps['onDismissModal'];
   onCancelLink: RouteLinkOverlayProps['onCancelLink'];
   onIntersectionAdd: IntersectionOverlayProps['onAdd'];
+  onIntersectionQuickAdd: IntersectionOverlayProps['onQuickAdd'];
   onIntersectionDelete: IntersectionOverlayProps['onDelete'];
   onIntersectionRename: IntersectionOverlayProps['onRename'];
   onIntersectionMove: IntersectionOverlayProps['onMove'];
@@ -200,6 +239,8 @@ interface MapViewProps {
   onZoomChange: (zoom: number) => void;
   fromScratch: FromScratchState | null;
   onScratchRoadSelected: (road: FromScratchRoad) => void;
+  /** Fly the map to this route path (set right after a route is created). */
+  focusRoute: FocusRouteRequest | null;
 }
 
 const MapView: React.FC<MapViewProps> = ({
@@ -236,6 +277,7 @@ const MapView: React.FC<MapViewProps> = ({
   isIntersectionEditMode,
   intersectionRoadItems,
   onIntersectionAdd,
+  onIntersectionQuickAdd,
   onIntersectionDelete,
   onIntersectionRename,
   onIntersectionMove,
@@ -243,6 +285,7 @@ const MapView: React.FC<MapViewProps> = ({
   onZoomChange,
   fromScratch,
   onScratchRoadSelected,
+  focusRoute,
 }) => {
   // In extend mode: hide all routes except the one being extended.
   // In trim mode: hide all routes – TrimRouteOverlay handles rendering.
@@ -289,6 +332,7 @@ const MapView: React.FC<MapViewProps> = ({
           onZoomChange={onZoomChange}
           onCenterChange={onCenterChange}
         />
+        <RouteFocuser routePolylines={routePolylines} focusRoute={focusRoute} />
         {polygon && (
           <GeoJSON
             key={polygonKey}
@@ -358,6 +402,7 @@ const MapView: React.FC<MapViewProps> = ({
           isEditMode={isIntersectionEditMode}
           roadItems={intersectionRoadItems}
           onAdd={onIntersectionAdd}
+          onQuickAdd={onIntersectionQuickAdd}
           onDelete={onIntersectionDelete}
           onRename={onIntersectionRename}
           onMove={onIntersectionMove}

@@ -3,10 +3,11 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import Cookies from 'js-cookie';
 import LocationControl from './components/LocationControl';
 import ZoomButtons from './components/ZoomButtons';
-import MapView from './components/MapView';
+import MapView, { FocusRouteRequest } from './components/MapView';
 import RoutePanel from './components/RoutePanel';
 import NewRoutePanel from './components/NewRoutePanel';
 import NamesEditModal from './components/NamesEditModal';
+import CoupleRouteModal from './components/CoupleRouteModal';
 import TrimRoutePanel from './components/TrimRoutePanel';
 import IntersectionPanel from './components/IntersectionPanel';
 import { BBox, RouteDoc, RoutePolyline, EndpointInfo, RoadArrow, PendingRoadItem, ExtendModeState, TrimModeState, SectorTrimModeState, LinkModeState, LinkCandidate, Intersection, IntersectionModeState, DisplayIntersectionState, FromScratchState } from './types/route';
@@ -119,6 +120,7 @@ function App() {
   const [previewRoutes, setPreviewRoutes] = useState<RoutePolyline[]>([]);
   const [cityBbox, setCityBbox] = useState<BBox | null>(saved?.cityBbox ?? null);
   const [editingRelationId, setEditingRelationId] = useState<number | null>(null);
+  const [couplingRelationId, setCouplingRelationId] = useState<number | null>(null);
   const [extendMode, setExtendMode] = useState<ExtendModeState | null>(null);
   const [trimMode, setTrimMode] = useState<TrimModeState | null>(null);
   const [isTrimSaving, setIsTrimSaving] = useState(false);
@@ -129,6 +131,12 @@ function App() {
   const [intersectionMode, setIntersectionMode] = useState<IntersectionModeState | null>(null);
   const [isIntersectionSaving, setIsIntersectionSaving] = useState(false);
   const [fromScratch, setFromScratch] = useState<FromScratchState | null>(null);
+  // Set right after a route is created: selects that route and flies the map to
+  // its path 0. `nonce` lets a repeat creation re-trigger the fly.
+  const [focusRoute, setFocusRoute] = useState<FocusRouteRequest | null>(null);
+  // Bumped after a map context-menu "交差点の追加" persists, to re-run the
+  // display-intersection fetch effect below.
+  const [intersectionRefreshToken, setIntersectionRefreshToken] = useState(0);
 
   // Refs for values needed inside callbacks without causing stale closures
   const latestRef  = useRef({ selections, zoom, mapCenter });
@@ -675,7 +683,7 @@ function App() {
         setDisplayIntersections(null);
       }
     })();
-  }, [selectedIndex, routePolylines, intersectionMode]);
+  }, [selectedIndex, routePolylines, intersectionMode, intersectionRefreshToken]);
 
   // ── Intersection edit mode handlers ──────────────────────────────────────────
 
@@ -847,6 +855,50 @@ function App() {
     });
   };
 
+  /**
+   * Map context-menu "交差点の追加" while a route is only selected (not in the
+   * right-panel intersection editor). Persists the new intersection to
+   * osm.jproad_routes immediately, then refreshes the displayed markers.
+   * Resolves only once the DB write + refetch have completed so the caller can
+   * keep its modal open until then.
+   */
+  const handleQuickAddIntersection = async (
+    lat: number,
+    lon: number,
+    names: string[],
+    highway_tag: string | null,
+  ): Promise<void> => {
+    if (!displayIntersections) return;
+    const { relation_id, path_idx } = displayIntersections;
+    try {
+      const res = await fetch(`/api/routes/${relation_id}/intersections/point`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path_idx, lat, lon, names, highway_tag }),
+      });
+      if (!res.ok) {
+        console.error('[handleQuickAddIntersection] server error:', await res.text());
+        return;
+      }
+      setIntersectionRefreshToken((t) => t + 1);
+    } catch (e) {
+      console.error('[handleQuickAddIntersection] error:', e);
+    }
+  };
+
+  /**
+   * After a route is created, select its path 0 in the right panel (which
+   * auto-scrolls the list to it) and ask the map to fly to that path.
+   */
+  const focusNewRoute = (polylines: RoutePolyline[], relation_id: number): void => {
+    const match =
+      polylines.find((p) => p.relation_id === relation_id && (p.path_idx ?? 0) === 0) ??
+      polylines.find((p) => p.relation_id === relation_id);
+    if (!match) return;
+    setSelectedIndex(match.index);
+    setFocusRoute({ relation_id, path_idx: match.path_idx ?? 0, nonce: Date.now() });
+  };
+
   // ── From-scratch handlers ────────────────────────────────────────────────────
 
   const handleEnterScratch = (query: string): void => {
@@ -879,15 +931,10 @@ function App() {
     }
     const { relation_id } = await res.json();
     setFromScratch(null);
-    if (cityBboxRef.current) await fetchRoutes(cityBboxRef.current);
+    const polylines = cityBboxRef.current ? await fetchRoutes(cityBboxRef.current) : [];
     setPanelMode('routes');
     setPreviewRoutes([]);
-    // Select the newly created route (routePolylines updates after fetchRoutes resolves)
-    setRoutePolylines((prev) => {
-      const match = prev.find((p) => p.relation_id === relation_id);
-      if (match) setSelectedIndex(match.index);
-      return prev;
-    });
+    focusNewRoute(polylines, relation_id);
   };
 
   // ── Route trim handlers ────────────────────────────────────────────────────────
@@ -1198,6 +1245,7 @@ function App() {
           onDismissLinkModal={handleResetLinkModal}
           onCancelLink={handleResetLinkModal}
           onIntersectionAdd={handleIntersectionAdd}
+          onIntersectionQuickAdd={panelMode === 'routes' ? handleQuickAddIntersection : undefined}
           onIntersectionDelete={handleIntersectionDelete}
           onIntersectionRename={handleIntersectionRename}
           onIntersectionMove={handleIntersectionMove}
@@ -1205,6 +1253,7 @@ function App() {
           onZoomChange={handleZoomChange}
           fromScratch={fromScratch}
           onScratchRoadSelected={handleScratchRoadSelected}
+          focusRoute={focusRoute}
         />
         {panelMode === 'routes' ? (
           <RoutePanel
@@ -1228,6 +1277,7 @@ function App() {
             linkingRelationId={linkMode?.relation_id}
             onIntersectionRoute={handleOpenIntersectionMode}
             intersectionRelationId={intersectionMode?.relation_id}
+            onCoupleRoute={(rid) => setCouplingRelationId(rid)}
           />
         ) : panelMode === 'trim' ? (
           <TrimRoutePanel
@@ -1272,10 +1322,11 @@ function App() {
               setPanelMode('routes');
               setPreviewRoutes([]);
             }}
-            onSaved={async () => {
-              if (cityBboxRef.current) await fetchRoutes(cityBboxRef.current);
+            onSaved={async (relation_id: number) => {
+              const polylines = cityBboxRef.current ? await fetchRoutes(cityBboxRef.current) : [];
               setPanelMode('routes');
               setPreviewRoutes([]);
+              focusNewRoute(polylines, relation_id);
             }}
             onEnterScratch={handleEnterScratch}
             onExitScratch={handleExitScratch}
@@ -1290,6 +1341,17 @@ function App() {
           onSaved={async () => {
             if (cityBboxRef.current) await fetchRoutes(cityBboxRef.current);
             setEditingRelationId(null);
+          }}
+        />
+      )}
+      {couplingRelationId !== null && (
+        <CoupleRouteModal
+          relation_id={couplingRelationId}
+          routePolylines={routePolylines}
+          onClose={() => setCouplingRelationId(null)}
+          onCoupled={async () => {
+            if (cityBboxRef.current) await fetchRoutes(cityBboxRef.current);
+            setCouplingRelationId(null);
           }}
         />
       )}

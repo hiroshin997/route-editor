@@ -97,7 +97,7 @@ const MapContextMenu: React.FC = () => {
           onContextMenu={(e) => e.preventDefault()}
         >
           <div className="ctx-menu-item" onClick={handleThisRoad}>
-            This road
+            about this road
           </div>
           <hr className="ctx-menu-divider" />
           <div
