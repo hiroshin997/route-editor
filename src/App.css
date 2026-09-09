@@ -745,6 +745,11 @@ body,
   user-select: none;
 }
 
+/* Focused only to receive ←/→ arrow-key navigation; no visible outline needed. */
+.extend-modal:focus {
+  outline: none;
+}
+
 .extend-modal-close {
   position: absolute;
   top: 6px;

@@ -89,15 +89,56 @@ function ExtendModalDiv({
     (e.nativeEvent as Event).stopPropagation();
   };
 
+  const modalRef = useRef<HTMLDivElement>(null);
+
+  // Focus the modal once the arrows are in so cursor-key navigation works
+  // straight away.
+  useEffect(() => {
+    if (modal.arrows && modal.arrows.length > 0) {
+      modalRef.current?.focus();
+    }
+  }, [modal.arrows]);
+
+  // ←/→ move the selection to the neighbouring arrow. Two arrows can share a
+  // bearing and overlap exactly, making them impossible to pick with the mouse;
+  // ordering by bearing lets the cursor keys reach every arrow regardless.
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+    const arrows = modal.arrows;
+    if (!arrows || arrows.length < 2) return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    const ordered = [...arrows].sort(
+      (a, b) =>
+        a.bearing - b.bearing ||
+        a.road_id - b.road_id ||
+        a.direction.localeCompare(b.direction),
+    );
+    const curIdx = ordered.findIndex((a) => a.road_id === modal.selected_road_id);
+    const delta = e.key === 'ArrowRight' ? 1 : -1;
+    let idx = curIdx === -1 ? (delta === 1 ? -1 : 0) : curIdx;
+    for (let step = 0; step < ordered.length; step++) {
+      idx = (idx + delta + ordered.length) % ordered.length;
+      if (ordered[idx].road_id !== modal.selected_road_id) {
+        onArrowSelect(ordered[idx].road_id);
+        break;
+      }
+    }
+  };
+
   const content = (
     <div
+      ref={modalRef}
       className="extend-modal"
+      tabIndex={-1}
       style={{ left: pixelPos.x - HALF, top: pixelPos.y - HALF }}
       onClick={stop}
       onMouseDown={stop}
       onPointerDown={stop}
       onDoubleClick={stop}
       onWheel={stop}
+      onKeyDown={handleKeyDown}
     >
       {/* Close button */}
       <button className="extend-modal-close" onClick={onCancel} title="閉じる">
@@ -130,7 +171,10 @@ function ExtendModalDiv({
               key={`${arrow.road_id}-${arrow.direction}`}
               arrow={arrow}
               selected={modal.selected_road_id === arrow.road_id}
-              onClick={() => onArrowSelect(arrow.road_id)}
+              onClick={() => {
+                onArrowSelect(arrow.road_id);
+                modalRef.current?.focus();
+              }}
             />
           ))}
         </svg>
