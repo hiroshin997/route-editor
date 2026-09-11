@@ -658,8 +658,11 @@ function App() {
 
   // ── Intersection display: fetch when a route is selected ─────────────────────
 
+  const displayIntersectionsRequestRef = useRef(0);
+
   useEffect(() => {
     console.log('[intersections displayEffect] selectedIndex=', selectedIndex, 'intersectionMode=', !!intersectionMode);
+    const requestId = ++displayIntersectionsRequestRef.current;
     if (selectedIndex === null) { setDisplayIntersections(null); return; }
     if (intersectionMode) return;
     const rp = routePolylines.find((p) => p.index === selectedIndex);
@@ -671,6 +674,10 @@ function App() {
         console.log(`[intersections displayEffect] fetching /api/routes/${relation_id}/intersections`);
         const res = await fetch(`/api/routes/${relation_id}/intersections`);
         const data = await res.json();
+        // Ignore this response if a newer selection has since started its own
+        // fetch – otherwise a slow response for a route that's no longer
+        // focused can land last and overwrite the current one.
+        if (requestId !== displayIntersectionsRequestRef.current) return;
         console.log('[intersections displayEffect] data=', data);
         const rawKey = (data.routes_keys ?? [])[path_idx];
         const groups_key: string | null = rawKey != null ? String(rawKey) : null;
@@ -679,6 +686,7 @@ function App() {
         console.log('[intersections displayEffect] groups_key=', groups_key, 'count=', intersections.length);
         setDisplayIntersections({ relation_id, path_idx, groups_key, intersections });
       } catch (e) {
+        if (requestId !== displayIntersectionsRequestRef.current) return;
         console.error('[intersections displayEffect] error:', e);
         setDisplayIntersections(null);
       }

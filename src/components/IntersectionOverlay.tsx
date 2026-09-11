@@ -322,7 +322,7 @@ const IntersectionOverlay: React.FC<IntersectionOverlayProps> = ({
       )}
 
       {/* Intersection markers */}
-      {intersections.map((inter) => {
+      {intersections.map((inter, idx) => {
         const pos: [number, number] = [Number(inter.lat), Number(inter.lon)];
         if (isNaN(pos[0]) || isNaN(pos[1])) {
           console.warn('[IntersectionOverlay] invalid position for', inter.intersection_id, pos);
@@ -330,7 +330,11 @@ const IntersectionOverlay: React.FC<IntersectionOverlayProps> = ({
         }
         return (
           <Marker
-            key={inter.intersection_id}
+            // intersection_id alone isn't unique – synthetic (address-based)
+            // intersections without a real OSM node all share id -1, and a
+            // duplicate React key leaks stale Marker instances across
+            // re-renders instead of unmounting them.
+            key={`${inter.intersection_id}-${idx}`}
             position={pos}
             icon={createIntersectionIcon(inter.names)}
             draggable={isEditMode}

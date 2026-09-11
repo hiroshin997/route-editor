@@ -7,16 +7,8 @@ Error: listen EADDRINUSE: address already in use :::5000
     at listenInCluster (node:net:1965:12)
     at Server.listen (node:net:2067:7)
     at Function.listen (D:\git\route-editor\server\node_modules\express\lib\application.js:635:24)
-    at D:\git\route-editor\server\index.js:1467:9
+    at D:\git\route-editor\server\index.js:1822:9
     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
 Emitted 'error' event on Server instance at:
     at emitErrorNT (node:net:1944:8)
     at process.processTicksAndRejections (node:internal/process/task_queues:82:21) {
-  code: 'EADDRINUSE',
-  errno: -4091,
-  syscall: 'listen',
-  address: '::',
-  port: 5000
-}
-
-Node.js v20.19.4
