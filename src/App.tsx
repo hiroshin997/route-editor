@@ -271,6 +271,13 @@ function App() {
 
         setSelections(matched);
 
+        // All URL segments matched real options — fetch the next level's
+        // options too so the panel shows an extra "未選択" dropdown, matching
+        // the behaviour of a manual selection via handleSelect.
+        if (matched.length === urlSegments.length) {
+          await fetchOptions(matched.length + 1, matched);
+        }
+
         // Resolved ?relation_id=&path= for the canonical URL. Stays '' (params
         // dropped) unless both location_0/location_1 resolved AND the query
         // points at a real route in the fetched list.
@@ -409,9 +416,11 @@ function App() {
       }
 
       if (level > 2 && cityBboxRef.current) {
-        // Deselecting a deeper level may change which boundary's motorways_only
-        // applies, even though the city bbox itself is unchanged.
-        await fetchRoutes(cityBboxRef.current);
+        // Deselecting a deeper level widens the route query back toward its
+        // parent boundary (or the city, once no deeper level remains), on
+        // top of any motorways_only change.
+        const queryBbox = (geoData && computeBboxFromGeoJSON(geoData)) || cityBboxRef.current;
+        await fetchRoutes(queryBbox);
       }
 
       persistSelections(newSelections, level <= 2 ? undefined : cityBboxRef.current ?? undefined);
@@ -447,10 +456,12 @@ function App() {
         persistSelections(newSelections, bbox);
       }
     } else {
-      // Level 3+: city bbox unchanged, but the deeper boundary's motorways_only
-      // flag may differ from its parent, so refresh the route filter.
+      // Level 3+: narrow the route query to the newly selected boundary's own
+      // bbox (falling back to the city bbox for boundaries with no polygon of
+      // their own), and refresh motorways_only for the new boundary.
       if (cityBboxRef.current) {
-        await fetchRoutes(cityBboxRef.current);
+        const queryBbox = (geoData && computeBboxFromGeoJSON(geoData)) || cityBboxRef.current;
+        await fetchRoutes(queryBbox);
       }
       persistSelections(newSelections, cityBboxRef.current ?? undefined);
     }
