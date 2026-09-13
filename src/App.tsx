@@ -225,6 +225,27 @@ function App() {
     }
   };
 
+  /**
+   * Re-fetches the route list (e.g. after a Save) while keeping whatever route
+   * path was selected in the right panel still selected. `index` is just a
+   * per-fetch sequence number, so leaving `selectedIndex` untouched across a
+   * refetch would leave it pointing at the index number that, after the fetch,
+   * now happens to belong to a different route.
+   */
+  const refetchRoutesPreservingSelection = async (bbox: BBox): Promise<RoutePolyline[]> => {
+    const current = selectedIndex !== null
+      ? routePolylines.find((p) => p.index === selectedIndex)
+      : undefined;
+    const polylines = await fetchRoutes(bbox);
+    if (current && current.relation_id !== undefined) {
+      const match =
+        polylines.find((p) => p.relation_id === current.relation_id && p.path_idx === current.path_idx) ??
+        polylines.find((p) => p.relation_id === current.relation_id);
+      setSelectedIndex(match ? match.index : null);
+    }
+    return polylines;
+  };
+
   // ── Initialisation on mount ───────────────────────────────────────────────────
 
   useEffect(() => {
@@ -662,7 +683,7 @@ function App() {
       }),
     });
     if (res.ok) {
-      if (cityBboxRef.current) await fetchRoutes(cityBboxRef.current);
+      if (cityBboxRef.current) await refetchRoutesPreservingSelection(cityBboxRef.current);
       setExtendMode(null);
     }
   };
@@ -798,7 +819,7 @@ function App() {
         body: JSON.stringify({ intersection_groups: newGroups, routes_key_updates }),
       });
       if (res.ok) {
-        if (cityBboxRef.current) await fetchRoutes(cityBboxRef.current);
+        if (cityBboxRef.current) await refetchRoutesPreservingSelection(cityBboxRef.current);
         setIntersectionMode(null);
         setPanelMode('routes');
       }
@@ -1014,7 +1035,7 @@ function App() {
         body: JSON.stringify({ path_idx: trimMode.path_idx, new_roads: trimMode.currentRoads }),
       });
       if (res.ok) {
-        if (cityBboxRef.current) await fetchRoutes(cityBboxRef.current);
+        if (cityBboxRef.current) await refetchRoutesPreservingSelection(cityBboxRef.current);
         setTrimMode(null);
         setPanelMode('routes');
       }
@@ -1096,7 +1117,7 @@ function App() {
       if (res.ok) {
         setSectorTrimMode(null);
         setPanelMode('routes');
-        if (cityBboxRef.current) await fetchRoutes(cityBboxRef.current);
+        if (cityBboxRef.current) await refetchRoutesPreservingSelection(cityBboxRef.current);
       }
     } catch (e) {
       console.error('[App] sector trim save error:', e);
@@ -1197,7 +1218,7 @@ function App() {
       });
       if (res.ok) {
         setLinkMode(null);
-        if (cityBboxRef.current) await fetchRoutes(cityBboxRef.current);
+        if (cityBboxRef.current) await refetchRoutesPreservingSelection(cityBboxRef.current);
       }
     } catch (e) {
       console.error('[App] link confirm error:', e);
@@ -1358,7 +1379,7 @@ function App() {
           relation_id={editingRelationId}
           onClose={() => setEditingRelationId(null)}
           onSaved={async () => {
-            if (cityBboxRef.current) await fetchRoutes(cityBboxRef.current);
+            if (cityBboxRef.current) await refetchRoutesPreservingSelection(cityBboxRef.current);
             setEditingRelationId(null);
           }}
         />
@@ -1369,7 +1390,7 @@ function App() {
           routePolylines={routePolylines}
           onClose={() => setCouplingRelationId(null)}
           onCoupled={async () => {
-            if (cityBboxRef.current) await fetchRoutes(cityBboxRef.current);
+            if (cityBboxRef.current) await refetchRoutesPreservingSelection(cityBboxRef.current);
             setCouplingRelationId(null);
           }}
         />

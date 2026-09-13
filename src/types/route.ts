@@ -30,6 +30,14 @@ export interface RoutePath {
   intersection_group_key?: string;
   /** true when this path's start and end nodes coincide */
   is_loop?: boolean;
+  /**
+   * True index in the full doc.routes[] array. Only present on /api/routes/in-bbox
+   * responses, where routes[] may have been filtered down to paths intersecting
+   * the query bbox — without this, a route with some paths outside the bbox would
+   * have its remaining paths renumbered from 0, pointing feature calls (link,
+   * trim, intersections, ...) at the wrong path.
+   */
+  path_idx?: number;
 }
 
 /** One document from jproad_routes collection. */

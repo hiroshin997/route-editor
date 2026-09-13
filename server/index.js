@@ -439,17 +439,26 @@ app.get('/api/routes/in-bbox', async (req, res) => {
       query['highway_stat.motorway'] = { $exists: true };
     }
 
+    // Sort by relation_id so list order is stable across requests. Without an
+    // explicit sort, MongoDB returns documents in natural (on-disk) order, which
+    // can shift after an update relocates a document (e.g. it grows in size) —
+    // that made the route list's index numbers jump around after every Save.
     const docs = await osmDb
       .collection(ROUTES_COLLECTION)
       .find(query, { projection: { names: 1, relation_id: 1, routes: 1, _id: 0 } })
+      .sort({ relation_id: 1 })
       .toArray();
 
     const bbox = { minLon, minLat, maxLon, maxLat };
     const filteredDocs = [];
     for (const doc of docs) {
-      const matchingSubRoutes = (doc.routes || []).filter((subRoute) =>
-        subRouteIntersectsBbox(subRoute, bbox)
-      );
+      // Tag each sub-route with its true index in doc.routes[] *before*
+      // filtering, so callers (e.g. the link/trim/intersection features) can
+      // still address the right path when a route has paths outside the
+      // current bbox — filtering alone would silently renumber them.
+      const matchingSubRoutes = (doc.routes || [])
+        .map((subRoute, path_idx) => ({ ...subRoute, path_idx }))
+        .filter((subRoute) => subRouteIntersectsBbox(subRoute, bbox));
       if (matchingSubRoutes.length > 0) {
         filteredDocs.push({
           relation_id: doc.relation_id,

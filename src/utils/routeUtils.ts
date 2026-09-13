@@ -130,7 +130,7 @@ export function computeRoutePolylines(docs: RouteDoc[], _bbox: BBox | null): Rou
         name: doc.names?.[0] ?? doc.name ?? '',
         coords,
         relation_id: doc.relation_id,
-        path_idx: i,
+        path_idx: doc.routes[i].path_idx ?? i,
         road_count: routeArray.length,
         is_loop: doc.routes[i].is_loop ?? false,
       });

@@ -482,6 +482,10 @@ body,
 .route-panel-intersection-btn { color: #888; }
 .route-panel-intersection-btn--active { color: #eab308 !important; }
 
+/* ── Route panel link button ─────────────────────────────────────────────── */
+.route-panel-link-btn { color: #888; }
+.route-panel-link-btn--active { color: #2563eb !important; }
+
 /* ── RoutePanel sector-trim button ──────────────────────────────────────────── */
 .route-panel-sector-trim-btn { color: #888; }
 .route-panel-sector-trim-btn--active { color: #f97316 !important; }
