@@ -216,7 +216,7 @@ interface MapViewProps {
   onHoveredIndexChange: (index: number | null) => void;
   onSelectedIndexChange: (index: number | null) => void;
   onEndpointClick: (ep: EndpointInfo) => void;
-  onArrowSelect: (roadId: number) => void;
+  onArrowSelect: (roadId: number, direction: 'ascend' | 'descend') => void;
   onForward: (fastForward: boolean) => void;
   onSaveAndClose: () => void;
   onCancelExtend: () => void;

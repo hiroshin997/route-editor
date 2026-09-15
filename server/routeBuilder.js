@@ -593,7 +593,11 @@ function applyIntersectionGroupKeys(routes) {
  * Used for direct route extension (bypasses the chaining algorithm).
  *
  * @param {object[]} roadDocs       - raw jproads documents
- * @param {Array<{road_id, direction: 'ascend'|'descend'}>} pendingRoads
+ * @param {Array<{road_id, direction: 'ascend'|'descend', sector_range?: [number, number]}>} pendingRoads
+ *   sector_range, when given, is a [start, endExclusive) range into the road's
+ *   ascend-ordered sector list – used for partial-road extension when the
+ *   connecting node is an interior point of the road rather than one of its ends.
+ *   Omitted (or absent) means the whole road.
  * @returns {object[]} path items (without side_road_ids; caller sets them)
  */
 function buildRoadItemsForDirections(roadDocs, pendingRoads) {
@@ -610,7 +614,9 @@ function buildRoadItemsForDirections(roadDocs, pendingRoads) {
     if (!info) continue;
     const widthM = info.widthM != null ? info.widthM
       : (info.highway ? DEFAULT_WIDTH_M_PER_HIGHWAY[info.highway] || DEFAULT_WIDTH_M : DEFAULT_WIDTH_M);
-    const ascendSectors = buildRoadSectorsAscend(info);
+    const ascendSectorsFull = buildRoadSectorsAscend(info);
+    const [rangeStart, rangeEnd] = pr.sector_range ?? [0, ascendSectorsFull.length];
+    const ascendSectors = ascendSectorsFull.slice(rangeStart, rangeEnd);
     const sectors = pr.direction === 'ascend' ? ascendSectors : cloneSectorsDescend(ascendSectors);
     items.push({ road_id: info.roadId, oneway: info.isForwardOnly, width_m: widthM, road_sectors: sectors });
   }

@@ -1277,8 +1277,9 @@ app.get('/api/roads/at-node', async (req, res) => {
 
       const isAtStart = fromNode === nodeId || (nodeRefs.length > 0 && nodeRefs[0] === nodeId);
       const isAtEnd   = toNode   === nodeId || (nodeRefs.length > 0 && nodeRefs[nodeRefs.length - 1] === nodeId);
+      const totalSectors = coords.length - 1;
 
-      if (!isAtStart && !isAtEnd) continue; // intermediate node – skip
+      if (!isAtStart && !isAtEnd && !nodeRefs.includes(nodeId)) continue; // node not on this road at all
 
       // Entry from start → ascending travel
       if (isAtStart) {
@@ -1295,6 +1296,8 @@ app.get('/api/roads/at-node', async (req, res) => {
           coords: coords.map((c) => [c[1], c[0]]),        // [lat, lon]
           width_m: widthM,
           highway: doc.highway || null,
+          is_interior: false,
+          sector_range: [0, totalSectors],
         });
       }
 
@@ -1317,7 +1320,59 @@ app.get('/api/roads/at-node', async (req, res) => {
           coords: [...coords].reverse().map((c) => [c[1], c[0]]),  // reversed [lat, lon]
           width_m: widthM,
           highway: doc.highway || null,
+          is_interior: false,
+          sector_range: [0, totalSectors],
         });
+      }
+
+      // Node also/only present at an interior (non-endpoint) point of the road's
+      // node_ref list → offer partial-road candidates split at that point, in
+      // both directions. Same oneway tag as the full road; the client applies the
+      // usual ascend/descend + endpoint-type filtering to drop illegal directions.
+      for (let k = 1; k < nodeRefs.length - 1; k++) {
+        if (nodeRefs[k] !== nodeId) continue;
+
+        // Toward the far (to_node) end: coords[k..end], sectors [k, totalSectors)
+        const ascCoords = coords.slice(k);
+        if (ascCoords.length >= 2) {
+          results.push({
+            road_id: roadId,
+            name: doc.name || '',
+            bearing: bearingDegreesInt(ascCoords[0][0], ascCoords[0][1], ascCoords[1][0], ascCoords[1][1]),
+            enter_from_start: true,
+            direction: 'ascend',
+            oneway,
+            new_node_id: toNode ?? nodeRefs[nodeRefs.length - 1],
+            new_lat: ascCoords[ascCoords.length - 1][1],
+            new_lon: ascCoords[ascCoords.length - 1][0],
+            coords: ascCoords.map((c) => [c[1], c[0]]),
+            width_m: widthM,
+            highway: doc.highway || null,
+            is_interior: true,
+            sector_range: [k, totalSectors],
+          });
+        }
+
+        // Toward the near (from_node) end: coords[k..0] reversed, sectors [0, k)
+        const descCoords = coords.slice(0, k + 1).reverse();
+        if (descCoords.length >= 2) {
+          results.push({
+            road_id: roadId,
+            name: doc.name || '',
+            bearing: bearingDegreesInt(descCoords[0][0], descCoords[0][1], descCoords[1][0], descCoords[1][1]),
+            enter_from_start: false,
+            direction: 'descend',
+            oneway,
+            new_node_id: fromNode ?? nodeRefs[0],
+            new_lat: descCoords[descCoords.length - 1][1],
+            new_lon: descCoords[descCoords.length - 1][0],
+            coords: descCoords.map((c) => [c[1], c[0]]),
+            width_m: widthM,
+            highway: doc.highway || null,
+            is_interior: true,
+            sector_range: [0, k],
+          });
+        }
       }
     }
 
@@ -1379,9 +1434,9 @@ app.post('/api/routes/:relation_id/extend', async (req, res) => {
 
       const flipDir = (dir) => (dir === 'ascend' ? 'descend' : 'ascend');
 
-      /** Build a single road item for the given traversal direction. */
-      const makeItem = (rdoc, direction) => {
-        const items = buildRoadItemsForDirections([rdoc], [{ road_id: nodeToInt(rdoc.id), direction }]);
+      /** Build a single road item for the given traversal direction (optionally a partial sector_range). */
+      const makeItem = (rdoc, direction, sectorRange) => {
+        const items = buildRoadItemsForDirections([rdoc], [{ road_id: nodeToInt(rdoc.id), direction, sector_range: sectorRange }]);
         return items[0] ?? null;
       };
 
@@ -1426,7 +1481,7 @@ app.post('/api/routes/:relation_id/extend', async (req, res) => {
         // 'end' (append)  → use direction as-is (road departs from node_id)
         // 'start' (prepend) → flip direction (road must arrive at node_id)
         const primDir = curEpType === 'start' ? flipDir(pr.direction) : pr.direction;
-        const primItem = makeItem(rdoc, primDir);
+        const primItem = makeItem(rdoc, primDir, pr.sector_range);
         if (!primItem) continue;
 
         // Apply to primary path
@@ -1460,7 +1515,7 @@ app.post('/api/routes/:relation_id/extend', async (req, res) => {
         // legal traversal in the opposite direction, so it stays on route_a only).
         if (revIdx >= 0 && !roadOneway) {
           const revDir = flipDir(primDir);
-          const revItem = makeItem(rdoc, revDir);
+          const revItem = makeItem(rdoc, revDir, pr.sector_range);
           if (revItem) {
             const revPath = routes[revIdx];
             const roads = [...revPath.roads];

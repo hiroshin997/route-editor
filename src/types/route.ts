@@ -183,6 +183,10 @@ export interface RoadArrow {
   coords: [number, number][]; // [lat, lon] in travel direction
   width_m: number;
   highway: string | null;
+  /** true when the connecting node is an interior point of this road (not one of its two ends). */
+  is_interior: boolean;
+  /** [start, endExclusive) sector-index range (ascend order) this candidate covers; the whole road when full-length. */
+  sector_range: [number, number];
 }
 
 export interface PendingRoadItem {
@@ -193,6 +197,8 @@ export interface PendingRoadItem {
   new_node_id: number;
   new_lat: number;
   new_lon: number;
+  /** [start, endExclusive) sector-index range (ascend order); passed through to the extend endpoint. */
+  sector_range: [number, number];
 }
 
 export interface ExtendModalState {
@@ -206,7 +212,13 @@ export interface ExtendModalState {
   has_sub_oneway: boolean;
   /** null = loading */
   arrows: RoadArrow[] | null;
+  /**
+   * Together identify the selected arrow: road_id alone is not unique once
+   * interior-node matches are possible, since the same road can offer both an
+   * 'ascend' and a 'descend' candidate at the same junction.
+   */
   selected_road_id: number | null;
+  selected_direction: 'ascend' | 'descend' | null;
   excluded_road_ids: number[];
 }
 

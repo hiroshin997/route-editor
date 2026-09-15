@@ -555,6 +555,7 @@ function App() {
         has_sub_oneway: hasSubOneway,
         arrows: null,
         selected_road_id: null,
+        selected_direction: null,
         excluded_road_ids: excludeIds,
       },
     }));
@@ -566,16 +567,34 @@ function App() {
 
     setExtendMode((prev) => {
       if (!prev?.modal) return prev;
-      const autoSelect = arrows.length === 1 ? arrows[0].road_id : null;
-      return { ...prev, modal: { ...prev.modal, arrows, selected_road_id: autoSelect } };
+      const autoSelect = arrows.length === 1 ? arrows[0] : null;
+      return {
+        ...prev,
+        modal: {
+          ...prev.modal,
+          arrows,
+          selected_road_id: autoSelect?.road_id ?? null,
+          selected_direction: autoSelect?.direction ?? null,
+        },
+      };
     });
   };
 
-  const handleArrowSelect = (roadId: number): void => {
+  // road_id alone doesn't uniquely identify an arrow once interior-node matches
+  // are possible (the same road can offer both an 'ascend' and a 'descend'
+  // candidate at the same junction), so direction is part of the identity.
+  const handleArrowSelect = (roadId: number, direction: 'ascend' | 'descend'): void => {
     setExtendMode((prev) => {
       if (!prev?.modal) return prev;
-      const newSel = prev.modal.selected_road_id === roadId ? null : roadId;
-      return { ...prev, modal: { ...prev.modal, selected_road_id: newSel } };
+      const isSame = prev.modal.selected_road_id === roadId && prev.modal.selected_direction === direction;
+      return {
+        ...prev,
+        modal: {
+          ...prev.modal,
+          selected_road_id: isSame ? null : roadId,
+          selected_direction: isSame ? null : direction,
+        },
+      };
     });
   };
 
@@ -583,14 +602,16 @@ function App() {
     if (!extendMode?.modal?.selected_road_id) return;
 
     // Capture initial state before any async ops
-    let currentArrow: RoadArrow | undefined = extendMode.modal.arrows?.find((a) => a.road_id === extendMode.modal!.selected_road_id);
+    let currentArrow: RoadArrow | undefined = extendMode.modal.arrows?.find(
+      (a) => a.road_id === extendMode.modal!.selected_road_id && a.direction === extendMode.modal!.selected_direction,
+    );
     if (!currentArrow) return;
 
     let currentModal = extendMode.modal;
     let accumulatedPendingRoads = [...extendMode.pending_roads];
 
     // Show loading state immediately
-    setExtendMode((prev) => prev ? { ...prev, modal: { ...prev.modal!, arrows: null, selected_road_id: null } } : null);
+    setExtendMode((prev) => prev ? { ...prev, modal: { ...prev.modal!, arrows: null, selected_road_id: null, selected_direction: null } } : null);
 
     // ── Fast-forward loop: process one road per iteration ──────────────────────
     while (true) {
@@ -604,6 +625,7 @@ function App() {
         new_node_id: arrow.new_node_id,
         new_lat: arrow.new_lat,
         new_lon: arrow.new_lon,
+        sector_range: arrow.sector_range,
       };
 
       // route_a is never reversed, so the endpoint type stays fixed for the
@@ -632,12 +654,16 @@ function App() {
         excluded_road_ids: newExcluded,
         arrows: newArrows,
         selected_road_id: null,
+        selected_direction: null,
       };
 
       // ── Fast-forward condition check ────────────────────────────────────────
+      // Auto-selection here never shows a modal, so it only considers
+      // conventional (road-endpoint) matches — interior-node matches always
+      // stop the chain and fall through to displaying the modal below.
       if (fastForward && arrow.name !== '') {
         // Condition 2: exactly one candidate with the same name
-        const sameNameCandidates = newArrows.filter((a) => a.name === arrow.name);
+        const sameNameCandidates = newArrows.filter((a) => !a.is_interior && a.name === arrow.name);
         if (sameNameCandidates.length === 1) {
           const candidate = sameNameCandidates[0];
           // Condition 3: angle between candidate bearing and current arrow bearing < 90°
@@ -652,8 +678,12 @@ function App() {
       }
 
       // Fast-forward stops (or was never active) → apply normal single-arrow auto-select
-      const autoSelect = newArrows.length === 1 ? newArrows[0].road_id : null;
-      currentModal = { ...currentModal, selected_road_id: autoSelect };
+      const autoSelect = newArrows.length === 1 ? newArrows[0] : null;
+      currentModal = {
+        ...currentModal,
+        selected_road_id: autoSelect?.road_id ?? null,
+        selected_direction: autoSelect?.direction ?? null,
+      };
       break;
     }
 

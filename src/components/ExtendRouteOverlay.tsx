@@ -78,7 +78,7 @@ function ExtendModalDiv({
   pendingCount: number;
   fastForward: boolean;
   onFastForwardChange: (v: boolean) => void;
-  onArrowSelect: (roadId: number) => void;
+  onArrowSelect: (roadId: number, direction: 'ascend' | 'descend') => void;
   onForward: () => void;
   onSaveAndClose: () => void;
   onCancel: () => void;
@@ -115,13 +115,15 @@ function ExtendModalDiv({
         a.road_id - b.road_id ||
         a.direction.localeCompare(b.direction),
     );
-    const curIdx = ordered.findIndex((a) => a.road_id === modal.selected_road_id);
+    const isSelected = (a: RoadArrow) =>
+      a.road_id === modal.selected_road_id && a.direction === modal.selected_direction;
+    const curIdx = ordered.findIndex(isSelected);
     const delta = e.key === 'ArrowRight' ? 1 : -1;
     let idx = curIdx === -1 ? (delta === 1 ? -1 : 0) : curIdx;
     for (let step = 0; step < ordered.length; step++) {
       idx = (idx + delta + ordered.length) % ordered.length;
-      if (ordered[idx].road_id !== modal.selected_road_id) {
-        onArrowSelect(ordered[idx].road_id);
+      if (!isSelected(ordered[idx])) {
+        onArrowSelect(ordered[idx].road_id, ordered[idx].direction);
         break;
       }
     }
@@ -170,9 +172,9 @@ function ExtendModalDiv({
             <ArrowPath
               key={`${arrow.road_id}-${arrow.direction}`}
               arrow={arrow}
-              selected={modal.selected_road_id === arrow.road_id}
+              selected={modal.selected_road_id === arrow.road_id && modal.selected_direction === arrow.direction}
               onClick={() => {
-                onArrowSelect(arrow.road_id);
+                onArrowSelect(arrow.road_id, arrow.direction);
                 modalRef.current?.focus();
               }}
             />
@@ -221,7 +223,7 @@ function ExtendModalDiv({
 export interface ExtendRouteOverlayProps {
   extendMode: ExtendModeState | null;
   onEndpointClick: (ep: EndpointInfo) => void;
-  onArrowSelect: (roadId: number) => void;
+  onArrowSelect: (roadId: number, direction: 'ascend' | 'descend') => void;
   onForward: (fastForward: boolean) => void;
   onSaveAndClose: () => void;
   onCancelExtend: () => void;

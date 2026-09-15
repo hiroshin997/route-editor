@@ -223,6 +223,9 @@ body,
   font-weight: bold;
   cursor: pointer;
   letter-spacing: 0.03em;
+  position: sticky;
+  top: 0;
+  z-index: 1;
 }
 
 .new-route-open-btn:hover:not(:disabled) {
