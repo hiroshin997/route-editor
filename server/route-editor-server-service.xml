@@ -1,7 +1,7 @@
 <service>
   <id>route-editor-server</id>
   <name>route-editor-server</name>
-  <description>route-editor API server (Express, port 5000)</description>
+  <description>route-editor API server (Express, port 5100)</description>
 
   <executable>C:\nvm4w\nodejs\node.exe</executable>
   <workingdirectory>D:\git\route-editor\server</workingdirectory>

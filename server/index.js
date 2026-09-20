@@ -8,7 +8,7 @@ const { buildRoutePreview, saveRoute, buildRouteFromRoadIds, buildRoadItemsForDi
 const { getNameVariations } = require('../src/utils/nameUtils');
 
 const app = express();
-const PORT = 5000;
+const PORT = process.env.PORT || 5100;
 const MONGO_URL = 'mongodb://192.168.1.3:27017';
 const DB_NAME = 'estat';
 const COLLECTION = 'boundaries';
