@@ -6,6 +6,7 @@ import LinkIcon from '@mui/icons-material/Link';
 import TrafficIcon from '@mui/icons-material/Traffic';
 import MergeIcon from '@mui/icons-material/Merge';
 import LoopIcon from '@mui/icons-material/Loop';
+import DeleteIcon from '@mui/icons-material/Delete';
 import { RoutePolyline } from '../types/route';
 
 // route-panel は表示切り替えで unmount されるため、スクロール位置はモジュールスコープで保持する。
@@ -33,6 +34,7 @@ interface RoutePanelProps {
   onIntersectionRoute: (relation_id: number, path_idx: number) => void;
   intersectionRelationId?: number;
   onCoupleRoute: (relation_id: number) => void;
+  onDeletePath: (relation_id: number, path_idx: number, route_name: string) => void;
 }
 
 const RoutePanel: React.FC<RoutePanelProps> = ({
@@ -55,6 +57,7 @@ const RoutePanel: React.FC<RoutePanelProps> = ({
   onIntersectionRoute,
   intersectionRelationId,
   onCoupleRoute,
+  onDeletePath,
 }) => {
   const newRouteEnabled = citySelected && zoom >= 10;
   // relation_id → number of paths currently listed for that route. A route with
@@ -190,6 +193,14 @@ const RoutePanel: React.FC<RoutePanelProps> = ({
                     onClick={(e) => { e.stopPropagation(); onIntersectionRoute(rp.relation_id!, rp.path_idx ?? 0); }}
                   >
                     <TrafficIcon fontSize="small" />
+                  </button>
+                  <button
+                    className="route-panel-edit-btn route-panel-delete-btn"
+                    title="パスを削除"
+                    disabled={extendingRelationId === rp.relation_id || linkingRelationId === rp.relation_id}
+                    onClick={(e) => { e.stopPropagation(); onDeletePath(rp.relation_id!, rp.path_idx ?? 0, rp.name); }}
+                  >
+                    <DeleteIcon fontSize="small" />
                   </button>
                   <button
                     className="route-panel-edit-btn route-panel-merge-btn"

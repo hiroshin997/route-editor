@@ -110,7 +110,7 @@ body,
 
 /* ── Route panel (wider to fit 4 action buttons) ─────────────────────────── */
 .route-panel {
-  width: 400px;
+  width: 450px;
   overflow-y: auto;
   border-left: 1px solid #d0d0d0;
   background: #fff;
@@ -240,7 +240,7 @@ body,
 
 /* ── NewRoutePanel ───────────────────────────────────────────────────────── */
 .new-route-panel {
-  width: 400px;
+  width: 450px;
   border-left: 1px solid #d0d0d0;
   background: #fff;
   display: flex;
@@ -502,7 +502,7 @@ body,
 
 /* ── IntersectionPanel ───────────────────────────────────────────────────── */
 .intersection-panel {
-  width: 400px;
+  width: 450px;
   border-left: 1px solid #d0d0d0;
   background: #fff;
   display: flex;
@@ -658,7 +658,7 @@ body,
 
 /* ── TrimRoutePanel ──────────────────────────────────────────────────────── */
 .trim-route-panel {
-  width: 400px;
+  width: 450px;
   border-left: 1px solid #d0d0d0;
   background: #fff;
   display: flex;

@@ -8,6 +8,7 @@ import RoutePanel from './components/RoutePanel';
 import NewRoutePanel from './components/NewRoutePanel';
 import NamesEditModal from './components/NamesEditModal';
 import CoupleRouteModal from './components/CoupleRouteModal';
+import DeletePathModal from './components/DeletePathModal';
 import TrimRoutePanel from './components/TrimRoutePanel';
 import IntersectionPanel from './components/IntersectionPanel';
 import { BBox, RouteDoc, RoutePolyline, EndpointInfo, RoadArrow, PendingRoadItem, ExtendModeState, TrimModeState, SectorTrimModeState, LinkModeState, LinkCandidate, Intersection, IntersectionModeState, DisplayIntersectionState, FromScratchState } from './types/route';
@@ -42,23 +43,26 @@ function writeCookieState(state: SavedState): void {
 }
 
 /**
- * Filter arrow candidates from /api/roads/at-node.
+ * Mark arrow candidates from /api/roads/at-node.
  * The existing route (route_a) is never reversed to fit a candidate, so a
  * one-way road that would have to be driven against its arrow to attach here
- * is dropped — regardless of whether the route already contains one-way roads:
+ * is flagged against_oneway — regardless of whether the route already contains
+ * one-way roads:
  *   'end'   endpoint + oneway + descend  (to_node=nodeId – can't depart backward)
  *   'start' endpoint + oneway + ascend   (from_node=nodeId – can't arrive backward)
+ * Flagged arrows are only offered when "include oneway" is checked.
  */
-function filterValidArrows(
+function markOnewayArrows(
   arrows: import('./types/route').RoadArrow[],
   endpointType: 'start' | 'end',
 ): import('./types/route').RoadArrow[] {
-  return arrows.filter((a) => {
-    if (!a.oneway) return true;
-    if (endpointType === 'end'   && a.direction === 'descend') return false;
-    if (endpointType === 'start' && a.direction === 'ascend')  return false;
-    return true;
-  });
+  return arrows.map((a) => ({
+    ...a,
+    against_oneway: a.oneway && (
+      (endpointType === 'end'   && a.direction === 'descend') ||
+      (endpointType === 'start' && a.direction === 'ascend')
+    ),
+  }));
 }
 
 /** Normalize a raw intersection: legacy `name: string` → `names: string[]`. */
@@ -121,6 +125,7 @@ function App() {
   const [cityBbox, setCityBbox] = useState<BBox | null>(saved?.cityBbox ?? null);
   const [editingRelationId, setEditingRelationId] = useState<number | null>(null);
   const [couplingRelationId, setCouplingRelationId] = useState<number | null>(null);
+  const [deletingPath, setDeletingPath] = useState<{ relation_id: number; path_idx: number; route_name: string } | null>(null);
   const [extendMode, setExtendMode] = useState<ExtendModeState | null>(null);
   const [trimMode, setTrimMode] = useState<TrimModeState | null>(null);
   const [isTrimSaving, setIsTrimSaving] = useState(false);
@@ -563,11 +568,12 @@ function App() {
     const params = `nodeId=${ep.node_id}&excludeRoadIds=${excludeIds.join(',')}`;
     const res = await fetch(`/api/roads/at-node?${params}`);
     const rawArrows: RoadArrow[] = await res.json();
-    const arrows = filterValidArrows(rawArrows, ep.endpoint);
+    const arrows = markOnewayArrows(rawArrows, ep.endpoint);
+    const validArrows = arrows.filter((a) => !a.against_oneway);
 
     setExtendMode((prev) => {
       if (!prev?.modal) return prev;
-      const autoSelect = arrows.length === 1 ? arrows[0] : null;
+      const autoSelect = validArrows.length === 1 ? validArrows[0] : null;
       return {
         ...prev,
         modal: {
@@ -617,10 +623,14 @@ function App() {
     while (true) {
       const arrow: RoadArrow = currentArrow!;
 
+      // An against-oneway arrow (picked via "include oneway") is appended as a
+      // two-way road: the server treats it as oneway="no" within this route.
+      const forceTwoway = !!arrow.against_oneway;
       const newPending: PendingRoadItem = {
         road_id: arrow.road_id,
         direction: arrow.direction,
-        oneway: arrow.oneway,
+        oneway: arrow.oneway && !forceTwoway,
+        ...(forceTwoway && { force_twoway: true }),
         coords: arrow.coords,
         new_node_id: arrow.new_node_id,
         new_lat: arrow.new_lat,
@@ -631,7 +641,7 @@ function App() {
       // route_a is never reversed, so the endpoint type stays fixed for the
       // whole fast-forward chain.
       const newEndpointType = currentModal.endpoint_type;
-      const newHasOneway = currentModal.has_oneway || arrow.oneway;
+      const newHasOneway = currentModal.has_oneway || newPending.oneway;
       const newHasSubOneway = currentModal.has_sub_oneway;
       const newExcluded = [...currentModal.excluded_road_ids, arrow.road_id];
 
@@ -641,7 +651,10 @@ function App() {
       const params = `nodeId=${arrow.new_node_id}&excludeRoadIds=${newExcluded.join(',')}`;
       const res = await fetch(`/api/roads/at-node?${params}`);
       const rawArrows: RoadArrow[] = await res.json();
-      const newArrows = filterValidArrows(rawArrows, newEndpointType);
+      const newArrows = markOnewayArrows(rawArrows, newEndpointType);
+      // Auto-selection (fast-forward and single-candidate) never picks an
+      // against-oneway arrow; those require an explicit user choice.
+      const validArrows = newArrows.filter((a) => !a.against_oneway);
 
       // Update local modal state
       currentModal = {
@@ -663,7 +676,7 @@ function App() {
       // stop the chain and fall through to displaying the modal below.
       if (fastForward && arrow.name !== '') {
         // Condition 2: exactly one candidate with the same name
-        const sameNameCandidates = newArrows.filter((a) => !a.is_interior && a.name === arrow.name);
+        const sameNameCandidates = validArrows.filter((a) => !a.is_interior && a.name === arrow.name);
         if (sameNameCandidates.length === 1) {
           const candidate = sameNameCandidates[0];
           // Condition 3: angle between candidate bearing and current arrow bearing < 90°
@@ -678,7 +691,7 @@ function App() {
       }
 
       // Fast-forward stops (or was never active) → apply normal single-arrow auto-select
-      const autoSelect = newArrows.length === 1 ? newArrows[0] : null;
+      const autoSelect = validArrows.length === 1 ? validArrows[0] : null;
       currentModal = {
         ...currentModal,
         selected_road_id: autoSelect?.road_id ?? null,
@@ -1348,6 +1361,7 @@ function App() {
             onIntersectionRoute={handleOpenIntersectionMode}
             intersectionRelationId={intersectionMode?.relation_id}
             onCoupleRoute={(rid) => setCouplingRelationId(rid)}
+            onDeletePath={(rid, path_idx, route_name) => setDeletingPath({ relation_id: rid, path_idx, route_name })}
           />
         ) : panelMode === 'trim' ? (
           <TrimRoutePanel
@@ -1422,6 +1436,18 @@ function App() {
           onCoupled={async () => {
             if (cityBboxRef.current) await refetchRoutesPreservingSelection(cityBboxRef.current);
             setCouplingRelationId(null);
+          }}
+        />
+      )}
+      {deletingPath !== null && (
+        <DeletePathModal
+          relation_id={deletingPath.relation_id}
+          route_name={deletingPath.route_name}
+          path_idx={deletingPath.path_idx}
+          onClose={() => setDeletingPath(null)}
+          onDeleted={async () => {
+            if (cityBboxRef.current) await refetchRoutesPreservingSelection(cityBboxRef.current);
+            setDeletingPath(null);
           }}
         />
       )}

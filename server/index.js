@@ -1139,6 +1139,91 @@ app.post('/api/routes/:relation_id/couple', async (req, res) => {
   }
 });
 
+// ── Route path delete endpoint ────────────────────────────────────────────────
+
+/**
+ * DELETE /api/routes/:relation_id/paths/:path_idx
+ *
+ * Removes routes[path_idx] from the route:
+ *   - when it is the route's only path, the whole document is hard-deleted
+ *     (deleteOne, not is_deleted = true)
+ *   - otherwise routes[path_idx] and its intersection group are removed, each
+ *     remaining path's group is re-keyed to str(its new index) (e.g. "1" → "0"),
+ *     and top-level roads[] / bbox are rebuilt from the remaining paths.
+ *     roads[] keeps an existing entry's role when its road_id is still used.
+ * Responds { ok, route_deleted }.
+ */
+app.delete('/api/routes/:relation_id/paths/:path_idx', async (req, res) => {
+  try {
+    const relation_id = parseInt(req.params.relation_id, 10);
+    const path_idx = parseInt(req.params.path_idx, 10);
+    if (isNaN(relation_id) || isNaN(path_idx)) {
+      return res.status(400).json({ error: 'relation_id and path_idx required' });
+    }
+
+    const col = osmDb.collection(ROUTES_COLLECTION);
+    const doc = await col.findOne(
+      { relation_id },
+      { projection: { routes: 1, intersection_groups: 1, roads: 1, _id: 0 } }
+    );
+    if (!doc) return res.status(404).json({ error: 'Route not found' });
+
+    const routes = doc.routes || [];
+    if (path_idx < 0 || path_idx >= routes.length) {
+      return res.status(400).json({ error: 'path_idx out of range' });
+    }
+
+    // 3.1 – the only path: hard-delete the route document itself.
+    if (routes.length === 1) {
+      await col.deleteOne({ relation_id });
+      return res.json({ ok: true, route_deleted: true });
+    }
+
+    // 3.2 – drop routes[path_idx] and its intersection group; re-key the rest.
+    const oldGroups = doc.intersection_groups || {};
+    const newGroups = {};
+    const remaining = routes
+      .filter((_, i) => i !== path_idx)
+      .map((p, newIdx) => {
+        const newKey = String(newIdx);
+        const oldKey = p.intersection_group_key;
+        if (oldKey !== undefined && oldKey !== null && oldGroups[String(oldKey)]) {
+          newGroups[newKey] = oldGroups[String(oldKey)];
+        }
+        return { ...p, intersection_group_key: newKey };
+      });
+    const newRoutes = applyIsLoopFlags(remaining);
+
+    // Rebuild top-level roads[] from the remaining paths' road_ids.
+    const roleById = new Map((doc.roads || []).map((r) => [Number(r.road_id), r.role ?? '']));
+    const seen = new Set();
+    const newRoads = [];
+    for (const p of newRoutes) {
+      for (const r of (p.roads || [])) {
+        const id = Number(r.road_id);
+        if (seen.has(id)) continue;
+        seen.add(id);
+        newRoads.push({ road_id: r.road_id, role: roleById.get(id) ?? '' });
+      }
+    }
+
+    const bbox = computeBboxFromPaths(newRoutes);
+
+    const pad = (n) => String(n).padStart(2, '0');
+    const jst = new Date(Date.now() + 9 * 3600 * 1000);
+    const updated_at = `${jst.getUTCFullYear()}-${pad(jst.getUTCMonth()+1)}-${pad(jst.getUTCDate())}T${pad(jst.getUTCHours())}:${pad(jst.getUTCMinutes())}:${pad(jst.getUTCSeconds())}+09:00`;
+
+    await col.updateOne(
+      { relation_id },
+      { $set: { routes: newRoutes, intersection_groups: newGroups, roads: newRoads, bbox, updated_at } }
+    );
+    res.json({ ok: true, route_deleted: false });
+  } catch (err) {
+    console.error('/api/routes/:id/paths/:path_idx DELETE error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Route extension endpoints ─────────────────────────────────────────────────
 
 /**
@@ -1458,8 +1543,12 @@ app.post('/api/routes/:relation_id/extend', async (req, res) => {
 
       for (const pr of pendingRoadsInput) {
         const roadId = Number(pr.road_id);
-        const rdoc = roadDocMap.get(roadId);
-        if (!rdoc) continue;
+        const baseDoc = roadDocMap.get(roadId);
+        if (!baseDoc) continue;
+        // force_twoway: the user picked this one-way road against its arrow via
+        // "include oneway" → treat it as oneway="no" within this route only
+        // (jproads itself is left untouched).
+        const rdoc = pr.force_twoway ? { ...baseDoc, oneway: 'no' } : baseDoc;
 
         const primPath = routes[path_idx];
         const node_id = curEpType === 'end' ? getEndNode(primPath) : getStartNode(primPath);

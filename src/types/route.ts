@@ -187,12 +187,21 @@ export interface RoadArrow {
   is_interior: boolean;
   /** [start, endExclusive) sector-index range (ascend order) this candidate covers; the whole road when full-length. */
   sector_range: [number, number];
+  /**
+   * Set client-side: true when this is a one-way road that would have to be
+   * traversed against its arrow to attach here. Shown (yellow) only while
+   * "include oneway" is checked; selecting it treats the road as two-way.
+   */
+  against_oneway?: boolean;
 }
 
 export interface PendingRoadItem {
   road_id: number;
   direction: 'ascend' | 'descend';
+  /** false when force_twoway is set, even if the road is tagged one-way. */
   oneway: boolean;
+  /** true → the server treats this road as oneway="no" within this route. */
+  force_twoway?: boolean;
   coords: [number, number][];
   new_node_id: number;
   new_lat: number;

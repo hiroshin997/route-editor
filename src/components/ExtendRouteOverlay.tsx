@@ -45,7 +45,7 @@ function ArrowPath({
   const h1y = ey + HEAD_LEN * Math.sin(angle + Math.PI - HEAD_SPREAD);
   const h2x = ex + HEAD_LEN * Math.cos(angle + Math.PI + HEAD_SPREAD);
   const h2y = ey + HEAD_LEN * Math.sin(angle + Math.PI + HEAD_SPREAD);
-  const color = selected ? '#2563eb' : '#d4d4d8';
+  const color = selected ? '#2563eb' : arrow.against_oneway ? '#eab308' : '#d4d4d8';
 
   return (
     <g onClick={onClick} style={{ cursor: 'pointer' }}>
@@ -67,6 +67,8 @@ function ExtendModalDiv({
   pendingCount,
   fastForward,
   onFastForwardChange,
+  includeOneway,
+  onIncludeOnewayChange,
   onArrowSelect,
   onForward,
   onSaveAndClose,
@@ -78,6 +80,8 @@ function ExtendModalDiv({
   pendingCount: number;
   fastForward: boolean;
   onFastForwardChange: (v: boolean) => void;
+  includeOneway: boolean;
+  onIncludeOnewayChange: (v: boolean) => void;
   onArrowSelect: (roadId: number, direction: 'ascend' | 'descend') => void;
   onForward: () => void;
   onSaveAndClose: () => void;
@@ -91,6 +95,9 @@ function ExtendModalDiv({
 
   const modalRef = useRef<HTMLDivElement>(null);
 
+  // Against-oneway arrows are offered (yellow) only while "include oneway" is on.
+  const visibleArrows = modal.arrows?.filter((a) => includeOneway || !a.against_oneway) ?? null;
+
   // Focus the modal once the arrows are in so cursor-key navigation works
   // straight away.
   useEffect(() => {
@@ -99,12 +106,23 @@ function ExtendModalDiv({
     }
   }, [modal.arrows]);
 
+  // Turning "include oneway" off must also drop a selected against-oneway arrow
+  // (onArrowSelect on the current selection toggles it off).
+  const handleIncludeOnewayChange = (v: boolean) => {
+    onIncludeOnewayChange(v);
+    if (v || modal.selected_road_id === null || modal.selected_direction === null) return;
+    const sel = modal.arrows?.find(
+      (a) => a.road_id === modal.selected_road_id && a.direction === modal.selected_direction,
+    );
+    if (sel?.against_oneway) onArrowSelect(sel.road_id, sel.direction);
+  };
+
   // ←/→ move the selection to the neighbouring arrow. Two arrows can share a
   // bearing and overlap exactly, making them impossible to pick with the mouse;
   // ordering by bearing lets the cursor keys reach every arrow regardless.
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
-    const arrows = modal.arrows;
+    const arrows = visibleArrows;
     if (!arrows || arrows.length < 2) return;
     e.preventDefault();
     e.stopPropagation();
@@ -148,7 +166,7 @@ function ExtendModalDiv({
       </button>
 
       {/* Arrow SVG or loading spinner */}
-      {modal.arrows === null ? (
+      {visibleArrows === null ? (
         <div
           style={{
             width: SVG_SIZE,
@@ -168,7 +186,7 @@ function ExtendModalDiv({
           onClick={stop}
         >
           <circle cx={HALF} cy={HALF} r={7} fill="#2563eb" stroke="white" strokeWidth={2} />
-          {modal.arrows.map((arrow) => (
+          {visibleArrows.map((arrow) => (
             <ArrowPath
               key={`${arrow.road_id}-${arrow.direction}`}
               arrow={arrow}
@@ -190,6 +208,16 @@ function ExtendModalDiv({
           onChange={(e) => onFastForwardChange(e.target.checked)}
         />
         {' fast-forward mode'}
+      </label>
+
+      {/* include-oneway checkbox */}
+      <label className="extend-modal-ff-label">
+        <input
+          type="checkbox"
+          checked={includeOneway}
+          onChange={(e) => handleIncludeOnewayChange(e.target.checked)}
+        />
+        {' include oneway'}
       </label>
 
       {/* Buttons */}
@@ -240,6 +268,9 @@ const ExtendRouteOverlay: React.FC<ExtendRouteOverlayProps> = ({
   const map = useMap();
   const [modalPixelPos, setModalPixelPos] = useState<{ x: number; y: number } | null>(null);
   const [fastForward, setFastForward] = useState(false);
+  // Always OFF by default and reset whenever the modal moves, so a one-way road
+  // is never driven against its arrow unintentionally.
+  const [includeOneway, setIncludeOneway] = useState(false);
 
   // Reset fast-forward checkbox when App.tsx increments the reset token
   const prevResetToken = useRef(0);
@@ -262,6 +293,7 @@ const ExtendRouteOverlay: React.FC<ExtendRouteOverlayProps> = ({
   };
 
   useEffect(() => {
+    setIncludeOneway(false);
     if (!extendMode?.modal) {
       // Modal intentionally closed – clear pixel position
       setModalPixelPos(null);
@@ -314,8 +346,13 @@ const ExtendRouteOverlay: React.FC<ExtendRouteOverlayProps> = ({
           pendingCount={extendMode.pending_roads.length}
           fastForward={fastForward}
           onFastForwardChange={setFastForward}
+          includeOneway={includeOneway}
+          onIncludeOnewayChange={setIncludeOneway}
           onArrowSelect={onArrowSelect}
-          onForward={() => onForward(fastForward)}
+          onForward={() => {
+            setIncludeOneway(false);
+            onForward(fastForward);
+          }}
           onSaveAndClose={onSaveAndClose}
           onCancel={onCancelExtend}
           mapContainer={map.getContainer()}
