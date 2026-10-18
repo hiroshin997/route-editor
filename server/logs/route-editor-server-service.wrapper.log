@@ -55675,3 +55675,589 @@
 2026-10-17 17:43:29,382 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
 2026-10-17 17:43:29,408 INFO  - Started process 27220
 2026-10-17 17:43:29,423 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 17:49:31,037 DEBUG - Starting WinSW in service mode
+2026-10-18 17:49:31,173 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 17:49:31,657 INFO  - Started process 23044
+2026-10-18 17:49:32,401 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 17:49:58,672 DEBUG - Starting WinSW in service mode
+2026-10-18 17:49:58,807 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 17:49:58,832 INFO  - Started process 16200
+2026-10-18 17:49:58,845 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 17:50:10,199 DEBUG - Starting WinSW in service mode
+2026-10-18 17:50:10,335 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 17:50:10,361 INFO  - Started process 25444
+2026-10-18 17:50:10,374 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 17:50:21,234 DEBUG - Starting WinSW in service mode
+2026-10-18 17:50:21,373 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 17:50:21,400 INFO  - Started process 33072
+2026-10-18 17:50:21,413 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 17:50:32,291 DEBUG - Starting WinSW in service mode
+2026-10-18 17:50:32,437 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 17:50:32,464 INFO  - Started process 33488
+2026-10-18 17:50:32,479 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 17:50:43,497 DEBUG - Starting WinSW in service mode
+2026-10-18 17:50:43,636 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 17:50:43,663 INFO  - Started process 25524
+2026-10-18 17:50:43,678 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 17:50:54,562 DEBUG - Starting WinSW in service mode
+2026-10-18 17:50:54,723 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 17:50:54,752 INFO  - Started process 33032
+2026-10-18 17:50:54,766 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 17:51:05,638 DEBUG - Starting WinSW in service mode
+2026-10-18 17:51:05,779 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 17:51:05,805 INFO  - Started process 27672
+2026-10-18 17:51:05,819 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 17:51:16,658 DEBUG - Starting WinSW in service mode
+2026-10-18 17:51:16,793 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 17:51:16,819 INFO  - Started process 9984
+2026-10-18 17:51:16,832 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 17:51:27,656 DEBUG - Starting WinSW in service mode
+2026-10-18 17:51:27,793 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 17:51:27,818 INFO  - Started process 12932
+2026-10-18 17:51:27,831 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 17:51:38,668 DEBUG - Starting WinSW in service mode
+2026-10-18 17:51:38,807 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 17:51:38,833 INFO  - Started process 25240
+2026-10-18 17:51:38,846 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 17:51:49,682 DEBUG - Starting WinSW in service mode
+2026-10-18 17:51:49,818 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 17:51:50,300 INFO  - Started process 34984
+2026-10-18 17:51:50,314 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 17:52:01,165 DEBUG - Starting WinSW in service mode
+2026-10-18 17:52:01,303 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 17:52:01,329 INFO  - Started process 3852
+2026-10-18 17:52:01,344 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 17:52:12,176 DEBUG - Starting WinSW in service mode
+2026-10-18 17:52:12,312 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 17:52:12,337 INFO  - Started process 6788
+2026-10-18 17:52:12,350 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 17:52:23,178 DEBUG - Starting WinSW in service mode
+2026-10-18 17:52:23,313 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 17:52:23,339 INFO  - Started process 14156
+2026-10-18 17:52:23,353 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 17:52:34,259 DEBUG - Starting WinSW in service mode
+2026-10-18 17:52:34,393 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 17:52:34,418 INFO  - Started process 3572
+2026-10-18 17:52:34,431 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 17:52:45,266 DEBUG - Starting WinSW in service mode
+2026-10-18 17:52:45,398 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 17:52:45,424 INFO  - Started process 2548
+2026-10-18 17:52:45,438 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 17:52:56,268 DEBUG - Starting WinSW in service mode
+2026-10-18 17:52:56,402 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 17:52:56,427 INFO  - Started process 21532
+2026-10-18 17:52:56,441 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 17:53:07,279 DEBUG - Starting WinSW in service mode
+2026-10-18 17:53:07,413 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 17:53:07,438 INFO  - Started process 1372
+2026-10-18 17:53:07,451 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 17:53:18,269 DEBUG - Starting WinSW in service mode
+2026-10-18 17:53:18,403 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 17:53:18,428 INFO  - Started process 24608
+2026-10-18 17:53:18,442 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 17:53:29,285 DEBUG - Starting WinSW in service mode
+2026-10-18 17:53:29,423 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 17:53:29,448 INFO  - Started process 33272
+2026-10-18 17:53:29,462 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 17:53:40,298 DEBUG - Starting WinSW in service mode
+2026-10-18 17:53:40,439 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 17:53:40,464 INFO  - Started process 4868
+2026-10-18 17:53:40,477 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 17:53:51,333 DEBUG - Starting WinSW in service mode
+2026-10-18 17:53:51,472 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 17:53:51,498 INFO  - Started process 22176
+2026-10-18 17:53:51,511 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 17:54:02,378 DEBUG - Starting WinSW in service mode
+2026-10-18 17:54:02,565 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 17:54:02,599 INFO  - Started process 28988
+2026-10-18 17:54:02,613 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 17:54:13,662 DEBUG - Starting WinSW in service mode
+2026-10-18 17:54:13,805 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 17:54:13,832 INFO  - Started process 10752
+2026-10-18 17:54:13,846 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 17:54:24,683 DEBUG - Starting WinSW in service mode
+2026-10-18 17:54:24,818 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 17:54:24,844 INFO  - Started process 3600
+2026-10-18 17:54:24,857 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 17:54:35,687 DEBUG - Starting WinSW in service mode
+2026-10-18 17:54:35,821 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 17:54:35,846 INFO  - Started process 12204
+2026-10-18 17:54:35,860 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 17:54:46,688 DEBUG - Starting WinSW in service mode
+2026-10-18 17:54:46,824 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 17:54:46,850 INFO  - Started process 22220
+2026-10-18 17:54:46,863 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 17:54:57,687 DEBUG - Starting WinSW in service mode
+2026-10-18 17:54:57,821 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 17:54:57,847 INFO  - Started process 27304
+2026-10-18 17:54:57,860 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 17:55:08,690 DEBUG - Starting WinSW in service mode
+2026-10-18 17:55:08,826 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 17:55:08,852 INFO  - Started process 26476
+2026-10-18 17:55:08,869 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 17:55:19,753 DEBUG - Starting WinSW in service mode
+2026-10-18 17:55:19,891 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 17:55:19,917 INFO  - Started process 28552
+2026-10-18 17:55:19,932 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 17:55:31,416 DEBUG - Starting WinSW in service mode
+2026-10-18 17:55:31,552 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 17:55:31,577 INFO  - Started process 10916
+2026-10-18 17:55:31,590 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 17:55:42,437 DEBUG - Starting WinSW in service mode
+2026-10-18 17:55:42,571 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 17:55:42,598 INFO  - Started process 33928
+2026-10-18 17:55:42,612 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 17:55:53,453 DEBUG - Starting WinSW in service mode
+2026-10-18 17:55:53,591 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 17:55:53,616 INFO  - Started process 17900
+2026-10-18 17:55:53,630 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 17:56:04,465 DEBUG - Starting WinSW in service mode
+2026-10-18 17:56:04,603 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 17:56:04,628 INFO  - Started process 18860
+2026-10-18 17:56:04,642 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 17:56:16,029 DEBUG - Starting WinSW in service mode
+2026-10-18 17:56:16,165 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 17:56:16,191 INFO  - Started process 28868
+2026-10-18 17:56:16,204 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 17:56:27,047 DEBUG - Starting WinSW in service mode
+2026-10-18 17:56:27,194 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 17:56:27,219 INFO  - Started process 27120
+2026-10-18 17:56:27,233 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 17:56:38,063 DEBUG - Starting WinSW in service mode
+2026-10-18 17:56:38,196 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 17:56:38,224 INFO  - Started process 34940
+2026-10-18 17:56:38,238 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 17:56:49,085 DEBUG - Starting WinSW in service mode
+2026-10-18 17:56:49,220 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 17:56:49,245 INFO  - Started process 23932
+2026-10-18 17:56:49,259 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 17:57:00,084 DEBUG - Starting WinSW in service mode
+2026-10-18 17:57:00,219 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 17:57:00,245 INFO  - Started process 17048
+2026-10-18 17:57:00,258 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 17:57:11,085 DEBUG - Starting WinSW in service mode
+2026-10-18 17:57:11,220 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 17:57:11,245 INFO  - Started process 23188
+2026-10-18 17:57:11,259 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 17:57:22,089 DEBUG - Starting WinSW in service mode
+2026-10-18 17:57:22,233 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 17:57:22,259 INFO  - Started process 23360
+2026-10-18 17:57:22,272 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 17:57:33,115 DEBUG - Starting WinSW in service mode
+2026-10-18 17:57:33,252 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 17:57:33,278 INFO  - Started process 9720
+2026-10-18 17:57:33,292 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 17:57:44,148 DEBUG - Starting WinSW in service mode
+2026-10-18 17:57:44,289 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 17:57:44,315 INFO  - Started process 32716
+2026-10-18 17:57:44,330 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 17:57:55,594 DEBUG - Starting WinSW in service mode
+2026-10-18 17:57:55,731 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 17:57:55,757 INFO  - Started process 32568
+2026-10-18 17:57:55,772 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 17:58:06,653 DEBUG - Starting WinSW in service mode
+2026-10-18 17:58:06,796 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 17:58:06,822 INFO  - Started process 35528
+2026-10-18 17:58:06,836 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 17:58:17,785 DEBUG - Starting WinSW in service mode
+2026-10-18 17:58:17,924 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 17:58:17,950 INFO  - Started process 8020
+2026-10-18 17:58:17,967 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 17:58:28,849 DEBUG - Starting WinSW in service mode
+2026-10-18 17:58:28,987 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 17:58:29,014 INFO  - Started process 17728
+2026-10-18 17:58:29,028 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 17:58:39,894 DEBUG - Starting WinSW in service mode
+2026-10-18 17:58:40,091 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 17:58:40,123 INFO  - Started process 16264
+2026-10-18 17:58:40,142 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 17:58:51,081 DEBUG - Starting WinSW in service mode
+2026-10-18 17:58:51,217 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 17:58:51,243 INFO  - Started process 4996
+2026-10-18 17:58:51,256 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 17:59:02,115 DEBUG - Starting WinSW in service mode
+2026-10-18 17:59:02,250 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 17:59:02,276 INFO  - Started process 3228
+2026-10-18 17:59:02,289 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 17:59:13,129 DEBUG - Starting WinSW in service mode
+2026-10-18 17:59:13,266 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 17:59:13,292 INFO  - Started process 31532
+2026-10-18 17:59:13,306 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 17:59:24,148 DEBUG - Starting WinSW in service mode
+2026-10-18 17:59:24,286 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 17:59:24,311 INFO  - Started process 15392
+2026-10-18 17:59:24,324 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 17:59:35,658 DEBUG - Starting WinSW in service mode
+2026-10-18 17:59:35,798 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 17:59:35,823 INFO  - Started process 10420
+2026-10-18 17:59:35,838 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 17:59:46,681 DEBUG - Starting WinSW in service mode
+2026-10-18 17:59:46,817 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 17:59:47,365 INFO  - Started process 31436
+2026-10-18 17:59:47,379 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 17:59:58,235 DEBUG - Starting WinSW in service mode
+2026-10-18 17:59:58,377 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 17:59:58,403 INFO  - Started process 3308
+2026-10-18 17:59:58,416 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 18:00:09,263 DEBUG - Starting WinSW in service mode
+2026-10-18 18:00:09,402 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 18:00:10,016 INFO  - Started process 34424
+2026-10-18 18:00:10,034 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 18:00:21,520 DEBUG - Starting WinSW in service mode
+2026-10-18 18:00:21,677 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 18:00:21,707 INFO  - Started process 9368
+2026-10-18 18:00:21,723 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 18:00:32,702 DEBUG - Starting WinSW in service mode
+2026-10-18 18:00:32,853 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 18:00:32,882 INFO  - Started process 32144
+2026-10-18 18:00:32,900 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 18:00:44,050 DEBUG - Starting WinSW in service mode
+2026-10-18 18:00:44,191 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 18:00:44,216 INFO  - Started process 720
+2026-10-18 18:00:44,231 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 18:00:55,208 DEBUG - Starting WinSW in service mode
+2026-10-18 18:00:55,351 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 18:00:55,377 INFO  - Started process 11908
+2026-10-18 18:00:55,391 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 18:01:06,243 DEBUG - Starting WinSW in service mode
+2026-10-18 18:01:06,383 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 18:01:06,410 INFO  - Started process 19532
+2026-10-18 18:01:06,424 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 18:01:17,689 DEBUG - Starting WinSW in service mode
+2026-10-18 18:01:17,852 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 18:01:18,310 INFO  - Started process 11804
+2026-10-18 18:01:18,329 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 18:01:29,285 DEBUG - Starting WinSW in service mode
+2026-10-18 18:01:29,426 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 18:01:29,453 INFO  - Started process 21560
+2026-10-18 18:01:29,469 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 18:01:40,324 DEBUG - Starting WinSW in service mode
+2026-10-18 18:01:40,463 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 18:01:40,488 INFO  - Started process 20784
+2026-10-18 18:01:40,502 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 18:01:51,356 DEBUG - Starting WinSW in service mode
+2026-10-18 18:01:51,509 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 18:01:51,534 INFO  - Started process 33372
+2026-10-18 18:01:51,548 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 18:02:02,394 DEBUG - Starting WinSW in service mode
+2026-10-18 18:02:02,530 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 18:02:02,556 INFO  - Started process 26664
+2026-10-18 18:02:02,570 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 18:02:13,407 DEBUG - Starting WinSW in service mode
+2026-10-18 18:02:13,547 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 18:02:13,572 INFO  - Started process 2436
+2026-10-18 18:02:13,586 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 18:02:24,588 DEBUG - Starting WinSW in service mode
+2026-10-18 18:02:24,724 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 18:02:24,750 INFO  - Started process 18588
+2026-10-18 18:02:24,764 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 18:02:35,633 DEBUG - Starting WinSW in service mode
+2026-10-18 18:02:35,770 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 18:02:35,804 INFO  - Started process 14188
+2026-10-18 18:02:35,820 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 18:02:46,729 DEBUG - Starting WinSW in service mode
+2026-10-18 18:02:46,884 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 18:02:46,913 INFO  - Started process 1288
+2026-10-18 18:02:46,929 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 18:02:58,308 DEBUG - Starting WinSW in service mode
+2026-10-18 18:02:58,449 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 18:02:58,476 INFO  - Started process 10516
+2026-10-18 18:02:58,489 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 18:03:09,342 DEBUG - Starting WinSW in service mode
+2026-10-18 18:03:09,617 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 18:03:09,643 INFO  - Started process 17224
+2026-10-18 18:03:09,656 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 18:03:20,516 DEBUG - Starting WinSW in service mode
+2026-10-18 18:03:20,663 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 18:03:20,689 INFO  - Started process 31120
+2026-10-18 18:03:20,703 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 18:03:32,060 DEBUG - Starting WinSW in service mode
+2026-10-18 18:03:32,205 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 18:03:32,234 INFO  - Started process 19252
+2026-10-18 18:03:32,247 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 18:03:43,173 DEBUG - Starting WinSW in service mode
+2026-10-18 18:03:43,314 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 18:03:43,340 INFO  - Started process 25300
+2026-10-18 18:03:43,354 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 18:03:54,213 DEBUG - Starting WinSW in service mode
+2026-10-18 18:03:54,350 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 18:03:54,377 INFO  - Started process 4628
+2026-10-18 18:03:54,390 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 18:04:05,236 DEBUG - Starting WinSW in service mode
+2026-10-18 18:04:05,737 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 18:04:05,764 INFO  - Started process 23736
+2026-10-18 18:04:05,779 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 18:04:16,638 DEBUG - Starting WinSW in service mode
+2026-10-18 18:04:17,033 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 18:04:17,058 INFO  - Started process 11732
+2026-10-18 18:04:17,072 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 18:04:27,928 DEBUG - Starting WinSW in service mode
+2026-10-18 18:04:28,071 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 18:04:28,098 INFO  - Started process 23588
+2026-10-18 18:04:28,113 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 18:04:38,960 DEBUG - Starting WinSW in service mode
+2026-10-18 18:04:39,101 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 18:04:39,127 INFO  - Started process 28236
+2026-10-18 18:04:39,141 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 18:04:49,970 DEBUG - Starting WinSW in service mode
+2026-10-18 18:04:50,275 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 18:04:50,301 INFO  - Started process 24476
+2026-10-18 18:04:50,316 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 18:05:01,147 DEBUG - Starting WinSW in service mode
+2026-10-18 18:05:01,280 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 18:05:01,305 INFO  - Started process 8348
+2026-10-18 18:05:01,319 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 18:05:12,304 DEBUG - Starting WinSW in service mode
+2026-10-18 18:05:12,441 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 18:05:12,467 INFO  - Started process 34616
+2026-10-18 18:05:12,481 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 18:05:23,350 DEBUG - Starting WinSW in service mode
+2026-10-18 18:05:23,487 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 18:05:23,514 INFO  - Started process 27732
+2026-10-18 18:05:23,528 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 18:05:34,398 DEBUG - Starting WinSW in service mode
+2026-10-18 18:05:34,545 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 18:05:34,573 INFO  - Started process 25916
+2026-10-18 18:05:34,588 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 18:05:45,453 DEBUG - Starting WinSW in service mode
+2026-10-18 18:05:45,597 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 18:05:45,623 INFO  - Started process 14692
+2026-10-18 18:05:45,637 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 18:05:56,497 DEBUG - Starting WinSW in service mode
+2026-10-18 18:05:56,631 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 18:05:56,658 INFO  - Started process 16472
+2026-10-18 18:05:56,673 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 18:06:07,529 DEBUG - Starting WinSW in service mode
+2026-10-18 18:06:07,672 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 18:06:07,698 INFO  - Started process 19940
+2026-10-18 18:06:07,714 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 18:06:18,578 DEBUG - Starting WinSW in service mode
+2026-10-18 18:06:18,715 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 18:06:18,741 INFO  - Started process 15732
+2026-10-18 18:06:18,755 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 18:06:29,601 DEBUG - Starting WinSW in service mode
+2026-10-18 18:06:29,745 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 18:06:29,772 INFO  - Started process 28848
+2026-10-18 18:06:29,785 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 18:06:40,639 DEBUG - Starting WinSW in service mode
+2026-10-18 18:06:40,778 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 18:06:40,803 INFO  - Started process 18040
+2026-10-18 18:06:40,817 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 18:06:51,668 DEBUG - Starting WinSW in service mode
+2026-10-18 18:06:51,803 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 18:06:51,828 INFO  - Started process 27396
+2026-10-18 18:06:51,844 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 18:07:02,711 DEBUG - Starting WinSW in service mode
+2026-10-18 18:07:02,849 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 18:07:02,875 INFO  - Started process 15100
+2026-10-18 18:07:02,888 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 18:07:13,769 DEBUG - Starting WinSW in service mode
+2026-10-18 18:07:13,907 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 18:07:13,935 INFO  - Started process 28912
+2026-10-18 18:07:13,951 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 18:07:24,832 DEBUG - Starting WinSW in service mode
+2026-10-18 18:07:24,967 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 18:07:24,994 INFO  - Started process 21816
+2026-10-18 18:07:25,012 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 18:07:35,891 DEBUG - Starting WinSW in service mode
+2026-10-18 18:07:36,027 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 18:07:36,054 INFO  - Started process 25400
+2026-10-18 18:07:36,070 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 18:07:46,946 DEBUG - Starting WinSW in service mode
+2026-10-18 18:07:47,130 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 18:07:47,166 INFO  - Started process 21100
+2026-10-18 18:07:47,185 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 18:07:58,098 DEBUG - Starting WinSW in service mode
+2026-10-18 18:07:58,245 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 18:07:58,271 INFO  - Started process 3704
+2026-10-18 18:07:58,286 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 18:08:09,138 DEBUG - Starting WinSW in service mode
+2026-10-18 18:08:09,270 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 18:08:09,297 INFO  - Started process 22136
+2026-10-18 18:08:09,311 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 18:08:20,193 DEBUG - Starting WinSW in service mode
+2026-10-18 18:08:20,348 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 18:08:20,379 INFO  - Started process 27072
+2026-10-18 18:08:20,395 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 18:08:31,263 DEBUG - Starting WinSW in service mode
+2026-10-18 18:08:31,404 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 18:08:31,435 INFO  - Started process 20644
+2026-10-18 18:08:31,452 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 18:08:42,358 DEBUG - Starting WinSW in service mode
+2026-10-18 18:08:42,492 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 18:08:42,517 INFO  - Started process 26984
+2026-10-18 18:08:42,530 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 18:08:53,367 DEBUG - Starting WinSW in service mode
+2026-10-18 18:08:53,509 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 18:08:53,534 INFO  - Started process 30552
+2026-10-18 18:08:53,547 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 18:09:04,474 DEBUG - Starting WinSW in service mode
+2026-10-18 18:09:04,617 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 18:09:04,642 INFO  - Started process 25152
+2026-10-18 18:09:04,657 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 18:09:15,502 DEBUG - Starting WinSW in service mode
+2026-10-18 18:09:15,637 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 18:09:15,663 INFO  - Started process 17220
+2026-10-18 18:09:15,678 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 18:09:26,535 DEBUG - Starting WinSW in service mode
+2026-10-18 18:09:26,676 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 18:09:26,702 INFO  - Started process 12480
+2026-10-18 18:09:26,716 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 18:09:37,576 DEBUG - Starting WinSW in service mode
+2026-10-18 18:09:37,716 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 18:09:37,743 INFO  - Started process 17508
+2026-10-18 18:09:37,757 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 18:09:48,620 DEBUG - Starting WinSW in service mode
+2026-10-18 18:09:48,758 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 18:09:48,786 INFO  - Started process 21628
+2026-10-18 18:09:48,800 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 18:09:59,656 DEBUG - Starting WinSW in service mode
+2026-10-18 18:09:59,795 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 18:09:59,821 INFO  - Started process 3032
+2026-10-18 18:09:59,835 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 18:10:10,671 DEBUG - Starting WinSW in service mode
+2026-10-18 18:10:10,809 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 18:10:10,835 INFO  - Started process 13444
+2026-10-18 18:10:10,849 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 18:10:21,714 DEBUG - Starting WinSW in service mode
+2026-10-18 18:10:21,880 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 18:10:21,909 INFO  - Started process 6156
+2026-10-18 18:10:21,922 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 18:10:32,791 DEBUG - Starting WinSW in service mode
+2026-10-18 18:10:33,190 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 18:10:33,217 INFO  - Started process 6960
+2026-10-18 18:10:33,231 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 18:10:44,104 DEBUG - Starting WinSW in service mode
+2026-10-18 18:10:44,249 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 18:10:44,275 INFO  - Started process 35836
+2026-10-18 18:10:44,292 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 18:10:55,166 DEBUG - Starting WinSW in service mode
+2026-10-18 18:10:55,305 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 18:10:55,331 INFO  - Started process 13176
+2026-10-18 18:10:55,346 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 18:11:06,202 DEBUG - Starting WinSW in service mode
+2026-10-18 18:11:06,606 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 18:11:06,634 INFO  - Started process 12688
+2026-10-18 18:11:06,649 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 18:11:17,499 DEBUG - Starting WinSW in service mode
+2026-10-18 18:11:17,638 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 18:11:17,664 INFO  - Started process 11104
+2026-10-18 18:11:17,677 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 18:11:28,545 DEBUG - Starting WinSW in service mode
+2026-10-18 18:11:28,690 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 18:11:28,718 INFO  - Started process 10980
+2026-10-18 18:11:28,734 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 18:11:39,610 DEBUG - Starting WinSW in service mode
+2026-10-18 18:11:39,746 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 18:11:40,257 INFO  - Started process 18660
+2026-10-18 18:11:40,272 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 18:11:51,119 DEBUG - Starting WinSW in service mode
+2026-10-18 18:11:51,257 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 18:11:51,284 INFO  - Started process 2640
+2026-10-18 18:11:51,299 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 18:12:02,641 DEBUG - Starting WinSW in service mode
+2026-10-18 18:12:02,785 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 18:12:02,811 INFO  - Started process 17308
+2026-10-18 18:12:02,824 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 18:12:13,662 DEBUG - Starting WinSW in service mode
+2026-10-18 18:12:13,802 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 18:12:13,828 INFO  - Started process 14536
+2026-10-18 18:12:13,845 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 18:12:24,726 DEBUG - Starting WinSW in service mode
+2026-10-18 18:12:24,864 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 18:12:24,891 INFO  - Started process 33360
+2026-10-18 18:12:24,905 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 18:12:35,752 DEBUG - Starting WinSW in service mode
+2026-10-18 18:12:35,891 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 18:12:35,917 INFO  - Started process 27116
+2026-10-18 18:12:35,932 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 18:12:46,773 DEBUG - Starting WinSW in service mode
+2026-10-18 18:12:46,910 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 18:12:46,937 INFO  - Started process 16500
+2026-10-18 18:12:46,953 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 18:12:57,786 DEBUG - Starting WinSW in service mode
+2026-10-18 18:12:57,928 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 18:12:57,954 INFO  - Started process 4728
+2026-10-18 18:12:57,967 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 18:13:08,799 DEBUG - Starting WinSW in service mode
+2026-10-18 18:13:08,937 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 18:13:08,964 INFO  - Started process 2480
+2026-10-18 18:13:08,977 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 18:13:19,855 DEBUG - Starting WinSW in service mode
+2026-10-18 18:13:19,992 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 18:13:20,018 INFO  - Started process 26056
+2026-10-18 18:13:20,032 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 18:13:30,902 DEBUG - Starting WinSW in service mode
+2026-10-18 18:13:31,037 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 18:13:31,065 INFO  - Started process 24380
+2026-10-18 18:13:31,078 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 18:13:42,406 DEBUG - Starting WinSW in service mode
+2026-10-18 18:13:42,559 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 18:13:42,587 INFO  - Started process 17504
+2026-10-18 18:13:42,606 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 18:13:53,522 DEBUG - Starting WinSW in service mode
+2026-10-18 18:13:53,666 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 18:13:53,692 INFO  - Started process 28676
+2026-10-18 18:13:53,708 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 18:14:04,664 DEBUG - Starting WinSW in service mode
+2026-10-18 18:14:04,797 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 18:14:04,823 INFO  - Started process 32532
+2026-10-18 18:14:04,837 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 18:14:15,696 DEBUG - Starting WinSW in service mode
+2026-10-18 18:14:15,833 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 18:14:15,860 INFO  - Started process 14424
+2026-10-18 18:14:15,874 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 18:14:26,724 DEBUG - Starting WinSW in service mode
+2026-10-18 18:14:26,858 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 18:14:26,884 INFO  - Started process 30912
+2026-10-18 18:14:26,899 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 18:14:37,774 DEBUG - Starting WinSW in service mode
+2026-10-18 18:14:37,913 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 18:14:37,939 INFO  - Started process 14536
+2026-10-18 18:14:37,954 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 18:14:48,840 DEBUG - Starting WinSW in service mode
+2026-10-18 18:14:48,987 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 18:14:49,017 INFO  - Started process 9788
+2026-10-18 18:14:49,032 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 18:14:59,876 DEBUG - Starting WinSW in service mode
+2026-10-18 18:15:00,020 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 18:15:00,046 INFO  - Started process 9400
+2026-10-18 18:15:00,060 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 18:15:11,383 DEBUG - Starting WinSW in service mode
+2026-10-18 18:15:11,519 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 18:15:11,545 INFO  - Started process 192
+2026-10-18 18:15:11,559 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 18:15:22,433 DEBUG - Starting WinSW in service mode
+2026-10-18 18:15:22,571 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 18:15:22,598 INFO  - Started process 18996
+2026-10-18 18:15:22,615 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 18:15:33,505 DEBUG - Starting WinSW in service mode
+2026-10-18 18:15:33,641 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 18:15:33,667 INFO  - Started process 33896
+2026-10-18 18:15:33,684 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 18:15:44,554 DEBUG - Starting WinSW in service mode
+2026-10-18 18:15:44,695 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 18:15:44,722 INFO  - Started process 33196
+2026-10-18 18:15:44,737 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 18:15:55,598 DEBUG - Starting WinSW in service mode
+2026-10-18 18:15:55,741 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 18:15:55,767 INFO  - Started process 23784
+2026-10-18 18:15:55,783 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 19:10:31,794 INFO  - Stopping route-editor-server
+2026-10-18 19:10:31,794 DEBUG - ProcessKill 23784
+2026-10-18 19:10:31,796 DEBUG - Stopping process 23784...
+2026-10-18 19:10:31,805 DEBUG - Process 23784 canceled with code -1073741510.
+2026-10-18 19:10:31,808 INFO  - Finished route-editor-server
+2026-10-18 19:11:11,901 DEBUG - Starting WinSW in service mode
+2026-10-18 19:11:12,040 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 19:11:12,066 INFO  - Started process 17572
+2026-10-18 19:11:12,080 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender
+2026-10-18 19:12:20,156 INFO  - Stopping route-editor-server
+2026-10-18 19:12:20,156 DEBUG - ProcessKill 17572
+2026-10-18 19:12:20,158 DEBUG - Stopping process 17572...
+2026-10-18 19:12:20,166 DEBUG - Process 17572 canceled with code -1073741510.
+2026-10-18 19:12:20,169 INFO  - Finished route-editor-server
+2026-10-18 19:13:09,402 DEBUG - Starting WinSW in service mode
+2026-10-18 19:13:09,536 INFO  - Starting C:\nvm4w\nodejs\node.exe  index.js
+2026-10-18 19:13:09,561 INFO  - Started process 19648
+2026-10-18 19:13:09,576 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.RollingLogAppender

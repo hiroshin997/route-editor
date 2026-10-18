@@ -1081,7 +1081,12 @@ function App() {
         if (cityBboxRef.current) await refetchRoutesPreservingSelection(cityBboxRef.current);
         setTrimMode(null);
         setPanelMode('routes');
+      } else {
+        console.error('[App] trim save server error:', res.status, await res.text());
+        window.alert(`保存に失敗しました (HTTP ${res.status} ${res.statusText})`);
       }
+    } catch (e) {
+      console.error('[App] trim save error:', e);
     } finally {
       setIsTrimSaving(false);
     }
@@ -1161,6 +1166,9 @@ function App() {
         setSectorTrimMode(null);
         setPanelMode('routes');
         if (cityBboxRef.current) await refetchRoutesPreservingSelection(cityBboxRef.current);
+      } else {
+        console.error('[App] sector trim save server error:', res.status, await res.text());
+        window.alert(`保存に失敗しました (HTTP ${res.status} ${res.statusText})`);
       }
     } catch (e) {
       console.error('[App] sector trim save error:', e);
