@@ -15,6 +15,7 @@ import { BBox, RouteDoc, RoutePolyline, EndpointInfo, RoadArrow, PendingRoadItem
 import { computeBboxFromGeoJSON, computeRoutePolylines, flattenRoadSectors, rebuildRoadsFromSectorRange, sectorCount } from './utils/routeUtils';
 import { getNameVariations } from './utils/nameUtils';
 import { buildAddressPath, parseAddressPath, parseRouteQuery, buildRouteSearch } from './utils/addressPath';
+import { alertSaveFailure } from './utils/saveError';
 import './App.css';
 
 const DEFAULT_CENTER: [number, number] = [36.2048, 138.2529];
@@ -728,6 +729,8 @@ function App() {
     if (res.ok) {
       if (cityBboxRef.current) await refetchRoutesPreservingSelection(cityBboxRef.current);
       setExtendMode(null);
+    } else {
+      await alertSaveFailure(res, 'App extend save');
     }
   };
 
@@ -1009,7 +1012,7 @@ function App() {
       body: JSON.stringify({ road_id: fromScratch.road.road_id, names, viewBbox }),
     });
     if (!res.ok) {
-      console.error('[handleSaveScratch] server error:', await res.text());
+      await alertSaveFailure(res, 'handleSaveScratch');
       return;
     }
     const { relation_id } = await res.json();
@@ -1082,8 +1085,7 @@ function App() {
         setTrimMode(null);
         setPanelMode('routes');
       } else {
-        console.error('[App] trim save server error:', res.status, await res.text());
-        window.alert(`保存に失敗しました (HTTP ${res.status} ${res.statusText})`);
+        await alertSaveFailure(res, 'App trim save');
       }
     } catch (e) {
       console.error('[App] trim save error:', e);
@@ -1167,8 +1169,7 @@ function App() {
         setPanelMode('routes');
         if (cityBboxRef.current) await refetchRoutesPreservingSelection(cityBboxRef.current);
       } else {
-        console.error('[App] sector trim save server error:', res.status, await res.text());
-        window.alert(`保存に失敗しました (HTTP ${res.status} ${res.statusText})`);
+        await alertSaveFailure(res, 'App sector trim save');
       }
     } catch (e) {
       console.error('[App] sector trim save error:', e);
@@ -1270,6 +1271,8 @@ function App() {
       if (res.ok) {
         setLinkMode(null);
         if (cityBboxRef.current) await refetchRoutesPreservingSelection(cityBboxRef.current);
+      } else {
+        await alertSaveFailure(res, 'App link confirm');
       }
     } catch (e) {
       console.error('[App] link confirm error:', e);

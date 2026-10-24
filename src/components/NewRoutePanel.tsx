@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { BBox, FromScratchState, RouteDoc, RoutePolyline } from '../types/route';
 import { computeRoutePolylines } from '../utils/routeUtils';
+import { alertSaveFailure } from '../utils/saveError';
 
 interface SearchResult {
   roadNames: string[];
@@ -140,6 +141,10 @@ const NewRoutePanel: React.FC<NewRoutePanelProps> = ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(previewData),
       });
+      if (!res.ok) {
+        await alertSaveFailure(res, 'NewRoutePanel');
+        return;
+      }
       const { relation_id } = await res.json();
       onPreviewRoutes([]);
       onSaved(relation_id);

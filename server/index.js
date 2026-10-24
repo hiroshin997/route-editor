@@ -807,6 +807,99 @@ function filterIntersectionGroupForTrim(existingGroups, trimKey, routes) {
   return { ...existingGroups, [trimKey]: filtered };
 }
 
+// ── Duplicate road_id guard ──────────────────────────────────────────────────
+
+class DuplicateRoadIdError extends Error {
+  constructor(road_id) {
+    super(`Cannot save the route path. A duplicated road_id: ${road_id} is used. Please re-edit the route path.`);
+    this.road_id = road_id;
+  }
+}
+
+/** True when two road_sectors share an endpoint node. */
+function sectorsShareNode(s, t) {
+  const a = nodeToInt(s.min_node_id), b = nodeToInt(s.max_node_id);
+  const c = nodeToInt(t.min_node_id), d = nodeToInt(t.max_node_id);
+  return a === c || a === d || b === c || b === d;
+}
+
+/**
+ * Remove later repeats of a road_id from one path's ordered roads[] (the first
+ * occurrence is kept). Each run of removed roads must leave the path connected:
+ * the kept road before the run and the kept road after it must share a node
+ * (a run at the path end just shortens the path). Otherwise throws
+ * DuplicateRoadIdError so the user re-edits the path.
+ * The side-road IDs across each closed gap are re-pointed at the new neighbours.
+ */
+function removeDuplicateRoads(roads) {
+  const seen = new Set();
+  const keep = (roads || []).map((r) => {
+    const id = Number(r.road_id);
+    if (seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  });
+  if (keep.every(Boolean)) return roads;
+
+  const out = [];
+  let removedRun = [];
+  for (let i = 0; i < roads.length; i++) {
+    if (!keep[i]) { removedRun.push(roads[i]); continue; }
+    const road = { ...roads[i] };
+    if (removedRun.length) {
+      const prev = out[out.length - 1];
+      const prevSectors = prev.road_sectors || [];
+      const lastSector = prevSectors[prevSectors.length - 1];
+      const firstSector = (road.road_sectors || [])[0];
+      if (!lastSector || !firstSector || !sectorsShareNode(lastSector, firstSector)) {
+        throw new DuplicateRoadIdError(removedRun[0].road_id);
+      }
+      if (lastSector.direction === 'ascend') prev.max_side_road_id = road.road_id;
+      else prev.min_side_road_id = road.road_id;
+      if (firstSector.direction === 'ascend') road.min_side_road_id = prev.road_id;
+      else road.max_side_road_id = prev.road_id;
+      console.warn('[removeDuplicateRoads] removed duplicated road_ids:', removedRun.map((r) => r.road_id));
+      removedRun = [];
+    }
+    out.push(road);
+  }
+  if (removedRun.length) {
+    // Trailing run: the last kept road becomes the path end.
+    const last = out[out.length - 1];
+    const lastSectors = last.road_sectors || [];
+    if (lastSectors[lastSectors.length - 1]?.direction === 'ascend') last.max_side_road_id = -1;
+    else last.min_side_road_id = -1;
+    console.warn('[removeDuplicateRoads] removed duplicated road_ids:', removedRun.map((r) => r.road_id));
+  }
+  return out;
+}
+
+/** Apply removeDuplicateRoads to every path of a routes[] array. */
+function removeDuplicateRoadsFromRoutes(routes) {
+  return (routes || []).map((p) => {
+    const roads = removeDuplicateRoads(p.roads || []);
+    return roads === p.roads ? p : { ...p, roads };
+  });
+}
+
+/** Dedupe a top-level roads[] list by road_id (the first entry wins). */
+function dedupeTopRoads(roads) {
+  const seen = new Set();
+  return (roads || []).filter((r) => {
+    const id = Number(r.road_id);
+    if (seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  });
+}
+
+/** Respond 409 for a DuplicateRoadIdError; returns false for any other error. */
+function sendDuplicateRoadIdError(res, err) {
+  if (!(err instanceof DuplicateRoadIdError)) return false;
+  res.status(409).json({ error: err.message, code: 'DUPLICATE_ROAD_ID', road_id: err.road_id });
+  return true;
+}
+
 /**
  * GET /api/routes/:relation_id/roads?path_idx=N
  * Returns the road_items array for routes[N] of the specified route doc.
@@ -861,7 +954,8 @@ app.put('/api/routes/:relation_id/trim', async (req, res) => {
       return road;
     });
 
-    const routes = applyIsLoopFlags((doc.routes || []).map((p, i) => (i === path_idx ? { ...p, roads: updated } : p)));
+    const routes = applyIsLoopFlags(removeDuplicateRoadsFromRoutes(
+      (doc.routes || []).map((p, i) => (i === path_idx ? { ...p, roads: updated } : p))));
     const bbox = computeBboxFromPaths(routes);
 
     const pad = (n) => String(n).padStart(2, '0');
@@ -879,6 +973,7 @@ app.put('/api/routes/:relation_id/trim', async (req, res) => {
     await col.updateOne({ relation_id }, { $set });
     res.json({ ok: true });
   } catch (err) {
+    if (sendDuplicateRoadIdError(res, err)) return;
     console.error('/api/routes/:id/trim error:', err);
     res.status(500).json({ error: err.message });
   }
@@ -1033,15 +1128,16 @@ app.post('/api/routes/:relation_id/link', async (req, res) => {
       newRoads = [...candRoads, ...origRoads];
     }
 
-    const newRoutes = applyIsLoopFlags(origDoc.routes.map((p, i) => i === path_idx ? { ...p, roads: newRoads } : p));
+    const newRoutes = applyIsLoopFlags(removeDuplicateRoadsFromRoutes(
+      origDoc.routes.map((p, i) => i === path_idx ? { ...p, roads: newRoads } : p)));
     const bbox = computeBboxFromPaths(newRoutes);
 
     // Merge top-level roads[] with new road_ids from candidate
     const existingIds = new Set((origDoc.roads || []).map(r => Number(r.road_id)));
-    const newTopRoads = [
+    const newTopRoads = dedupeTopRoads([
       ...(origDoc.roads || []),
       ...candRoads.filter(r => !existingIds.has(Number(r.road_id))).map(r => ({ road_id: r.road_id, role: '' })),
-    ];
+    ]);
 
     const pad = (n) => String(n).padStart(2, '0');
     const jst = new Date(Date.now() + 9 * 3600 * 1000);
@@ -1050,6 +1146,7 @@ app.post('/api/routes/:relation_id/link', async (req, res) => {
     await col.updateOne({ relation_id }, { $set: { routes: newRoutes, roads: newTopRoads, bbox, updated_at } });
     res.json({ ok: true });
   } catch (err) {
+    if (sendDuplicateRoadIdError(res, err)) return;
     console.error('/api/routes/:id/link error:', err);
     res.status(500).json({ error: err.message });
   }
@@ -1098,10 +1195,10 @@ app.post('/api/routes/:relation_id/couple', async (req, res) => {
 
     // 3.1 – append target.routes[0] as routes[1]; 3.3 – its key becomes "1".
     const addedPath = { ...targetRoutes[0], intersection_group_key: '1' };
-    const newRoutes = applyIsLoopFlags([
+    const newRoutes = applyIsLoopFlags(removeDuplicateRoadsFromRoutes([
       { ...origRoutes[0], intersection_group_key: '0' },
       addedPath,
-    ]);
+    ]));
 
     // 3.2 – append target.intersection_groups["0"] into this route's group "1".
     const origGroups = origDoc.intersection_groups || {};
@@ -1112,12 +1209,12 @@ app.post('/api/routes/:relation_id/couple', async (req, res) => {
 
     // Merge top-level roads[] with any new road_ids from the added path.
     const existingIds = new Set((origDoc.roads || []).map((r) => Number(r.road_id)));
-    const newRoads = [
+    const newRoads = dedupeTopRoads([
       ...(origDoc.roads || []),
       ...(addedPath.roads || [])
         .filter((r) => !existingIds.has(Number(r.road_id)))
         .map((r) => ({ road_id: r.road_id, role: '' })),
-    ];
+    ]);
 
     const bbox = computeBboxFromPaths(newRoutes);
 
@@ -1134,6 +1231,7 @@ app.post('/api/routes/:relation_id/couple', async (req, res) => {
 
     res.json({ ok: true });
   } catch (err) {
+    if (sendDuplicateRoadIdError(res, err)) return;
     console.error('/api/routes/:id/couple error:', err);
     res.status(500).json({ error: err.message });
   }
@@ -1252,7 +1350,8 @@ app.put('/api/routes/:relation_id/sector-trim', async (req, res) => {
       return road;
     });
 
-    const routes = applyIsLoopFlags((doc.routes || []).map((p, i) => (i === path_idx ? { ...p, roads: updated } : p)));
+    const routes = applyIsLoopFlags(removeDuplicateRoadsFromRoutes(
+      (doc.routes || []).map((p, i) => (i === path_idx ? { ...p, roads: updated } : p))));
     const bbox = computeBboxFromPaths(routes);
 
     const pad = (n) => String(n).padStart(2, '0');
@@ -1270,6 +1369,7 @@ app.put('/api/routes/:relation_id/sector-trim', async (req, res) => {
     await col.updateOne({ relation_id }, { $set });
     res.json({ ok: true });
   } catch (err) {
+    if (sendDuplicateRoadIdError(res, err)) return;
     console.error('/api/routes/:id/sector-trim error:', err);
     res.status(500).json({ error: err.message });
   }
@@ -1650,7 +1750,7 @@ app.post('/api/routes/:relation_id/extend', async (req, res) => {
         ...newRoadIds.filter((id) => !existingTopIds.has(id)).map((id) => ({ road_id: id, role: '' })),
       ];
 
-      const routesWithLoop = applyIsLoopFlags(routes);
+      const routesWithLoop = applyIsLoopFlags(removeDuplicateRoadsFromRoutes(routes));
       const bbox = computeBboxFromPaths(routesWithLoop);
       const existingGroups = doc.intersection_groups || {};
       const updatedGroups = await buildUpdatedIntersectionGroups(routesWithLoop, newRoadIds, existingGroups);
@@ -1669,10 +1769,10 @@ app.post('/api/routes/:relation_id/extend', async (req, res) => {
         if (!isNaN(id)) existingIds.add(id);
       }
     }
-    const allIds = [...existingIds, ...new_road_ids.map(Number)];
+    const allIds = [...new Set([...existingIds, ...new_road_ids.map(Number)])];
     // Pass null for cityBbox to skip step35Filter (geographic filter causes roads to be lost)
     const rebuilt = await buildRouteFromRoadIds(allIds, null, osmDb);
-    const routesWithKeys = applyIsLoopFlags(applyIntersectionGroupKeys(rebuilt.routes));
+    const routesWithKeys = applyIsLoopFlags(removeDuplicateRoadsFromRoutes(applyIntersectionGroupKeys(rebuilt.routes)));
 
     const existingGroupsFb = doc.intersection_groups || {};
     const updatedGroupsFb = await buildUpdatedIntersectionGroups(
@@ -1691,6 +1791,7 @@ app.post('/api/routes/:relation_id/extend', async (req, res) => {
     await col.updateOne({ relation_id }, { $set: $setPayload });
     res.json({ ok: true });
   } catch (err) {
+    if (sendDuplicateRoadIdError(res, err)) return;
     console.error('/api/routes/:id/extend error:', err);
     res.status(500).json({ error: err.message });
   }
@@ -1842,10 +1943,11 @@ app.post('/api/routes/preview', async (req, res) => {
  */
 app.post('/api/routes/save', async (req, res) => {
   try {
-    const { routes, bbox, highway_stat, names } = req.body;
-    if (!routes || !bbox || !names) {
+    const { bbox, highway_stat, names } = req.body;
+    if (!req.body.routes || !bbox || !names) {
       return res.status(400).json({ error: 'routes, bbox, names required' });
     }
+    const routes = removeDuplicateRoadsFromRoutes(req.body.routes);
     const result = await saveRoute({ routes, bbox, highway_stat: highway_stat || {}, names }, osmDb);
     // Add intersections for all roads in the saved route
     const routesWithKeys = applyIntersectionGroupKeys(routes);
@@ -1862,6 +1964,7 @@ app.post('/api/routes/save', async (req, res) => {
     );
     res.json(result);
   } catch (err) {
+    if (sendDuplicateRoadIdError(res, err)) return;
     console.error('/api/routes/save error:', err);
     res.status(500).json({ error: err.message });
   }
@@ -1948,7 +2051,8 @@ app.post('/api/routes/from-scratch', async (req, res) => {
       return res.status(400).json({ error: 'road_id, names, viewBbox required' });
     }
     // Pass null as cityBbox to skip step35Filter – the road is already known (user selected it)
-    const routeData = await buildRouteFromRoadIds([road_id], null, osmDb);
+    const built = await buildRouteFromRoadIds([road_id], null, osmDb);
+    const routeData = { ...built, routes: removeDuplicateRoadsFromRoutes(built.routes) };
     if (routeData.routes.length === 0) {
       return res.status(404).json({ error: 'No routes could be built for this road' });
     }
@@ -1965,6 +2069,7 @@ app.post('/api/routes/from-scratch', async (req, res) => {
     );
     res.json(result);
   } catch (err) {
+    if (sendDuplicateRoadIdError(res, err)) return;
     console.error('/api/routes/from-scratch error:', err);
     res.status(500).json({ error: err.message });
   }

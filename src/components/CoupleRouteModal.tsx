@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import CloseIcon from '@mui/icons-material/Close';
 import { RoutePolyline } from '../types/route';
+import { alertSaveFailure } from '../utils/saveError';
 
 interface CoupleRouteModalProps {
   /** relation_id of the route the MergeIcon was clicked on (the one that keeps its identity). */
@@ -58,7 +59,7 @@ const CoupleRouteModal: React.FC<CoupleRouteModalProps> = ({
       if (res.ok) {
         onCoupled();
       } else {
-        console.error('[CoupleRouteModal] server error:', await res.text());
+        await alertSaveFailure(res, 'CoupleRouteModal');
       }
     } finally {
       setIsSaving(false);
