@@ -133,6 +133,7 @@ export function computeRoutePolylines(docs: RouteDoc[], _bbox: BBox | null): Rou
         path_idx: doc.routes[i].path_idx ?? i,
         road_count: routeArray.length,
         is_loop: doc.routes[i].is_loop ?? false,
+        is_complete_route_edit: doc.routes[i].is_complete_route_edit ?? false,
       });
       index++;
     }

@@ -1848,6 +1848,36 @@ app.put('/api/routes/:relation_id/names', async (req, res) => {
   }
 });
 
+/**
+ * PUT /api/routes/:relation_id/complete-edit
+ * Body: { path_idx, is_complete_route_edit }
+ * Sets routes[path_idx].is_complete_route_edit (editing-finished flag shown in
+ * the right panel). A missing field is treated as false by the client.
+ */
+app.put('/api/routes/:relation_id/complete-edit', async (req, res) => {
+  try {
+    const relation_id = parseInt(req.params.relation_id, 10);
+    if (isNaN(relation_id)) return res.status(400).json({ error: 'Invalid relation_id' });
+
+    const path_idx = parseInt(req.body.path_idx, 10);
+    const { is_complete_route_edit } = req.body;
+    if (isNaN(path_idx) || path_idx < 0) return res.status(400).json({ error: 'Invalid path_idx' });
+    if (typeof is_complete_route_edit !== 'boolean') {
+      return res.status(400).json({ error: 'is_complete_route_edit boolean required' });
+    }
+
+    const result = await osmDb.collection(ROUTES_COLLECTION).updateOne(
+      { relation_id, [`routes.${path_idx}`]: { $exists: true } },
+      { $set: { [`routes.${path_idx}.is_complete_route_edit`]: is_complete_route_edit } }
+    );
+    if (result.matchedCount === 0) return res.status(404).json({ error: 'Route path not found' });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('/api/routes/:relation_id/complete-edit PUT error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── New-route registration endpoints ─────────────────────────────────────────
 
 /**

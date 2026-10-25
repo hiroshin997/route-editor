@@ -30,6 +30,8 @@ export interface RoutePath {
   intersection_group_key?: string;
   /** true when this path's start and end nodes coincide */
   is_loop?: boolean;
+  /** true when editing of this path has been marked finished (missing = false) */
+  is_complete_route_edit?: boolean;
   /**
    * True index in the full doc.routes[] array. Only present on /api/routes/in-bbox
    * responses, where routes[] may have been filtered down to paths intersecting
@@ -116,6 +118,8 @@ export interface RoutePolyline {
   road_count?: number;
   /** true when this path's start and end nodes coincide */
   is_loop?: boolean;
+  /** true when editing of this path has been marked finished */
+  is_complete_route_edit?: boolean;
 }
 
 // ── From-scratch route creation ───────────────────────────────────────────────

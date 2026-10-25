@@ -973,6 +973,38 @@ function App() {
   };
 
   /**
+   * Right-panel complete-edit toggle. Flips routes[path_idx].is_complete_route_edit
+   * in the list immediately and persists it to osm.jproad_routes; reverts the
+   * list if the write fails.
+   */
+  const handleToggleCompleteEdit = async (
+    relation_id: number,
+    path_idx: number,
+    is_complete: boolean,
+  ): Promise<void> => {
+    const setFlag = (value: boolean) =>
+      setRoutePolylines((prev) => prev.map((p) =>
+        p.relation_id === relation_id && (p.path_idx ?? 0) === path_idx
+          ? { ...p, is_complete_route_edit: value }
+          : p));
+    setFlag(is_complete);
+    try {
+      const res = await fetch(`/api/routes/${relation_id}/complete-edit`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path_idx, is_complete_route_edit: is_complete }),
+      });
+      if (!res.ok) {
+        console.error('[handleToggleCompleteEdit] server error:', await res.text());
+        setFlag(!is_complete);
+      }
+    } catch (e) {
+      console.error('[handleToggleCompleteEdit] error:', e);
+      setFlag(!is_complete);
+    }
+  };
+
+  /**
    * After a route is created, select its path 0 in the right panel (which
    * auto-scrolls the list to it) and ask the map to fly to that path.
    */
@@ -1373,6 +1405,7 @@ function App() {
             intersectionRelationId={intersectionMode?.relation_id}
             onCoupleRoute={(rid) => setCouplingRelationId(rid)}
             onDeletePath={(rid, path_idx, route_name) => setDeletingPath({ relation_id: rid, path_idx, route_name })}
+            onToggleCompleteEdit={handleToggleCompleteEdit}
           />
         ) : panelMode === 'trim' ? (
           <TrimRoutePanel

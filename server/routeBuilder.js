@@ -527,7 +527,8 @@ async function saveRoute(previewData, osmDb) {
     bbox: previewData.bbox,
     highway_stat: previewData.highway_stat || {},
     names: previewData.names,
-    routes: applyIsLoopFlags(applyIntersectionGroupKeys(previewData.routes)),
+    routes: applyIsLoopFlags(applyIntersectionGroupKeys(previewData.routes))
+      .map((path) => ({ ...path, is_complete_route_edit: false })),
     ref: '',
     network: '',
     updated_at: (() => {

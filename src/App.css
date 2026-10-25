@@ -108,9 +108,9 @@ body,
   width: 100%;
 }
 
-/* ── Route panel (wider to fit 4 action buttons) ─────────────────────────── */
+/* ── Route panel (wider to fit action buttons) ───────────────────────────── */
 .route-panel {
-  width: 450px;
+  width: 530px;
   overflow-y: auto;
   border-left: 1px solid #d0d0d0;
   background: #fff;
@@ -240,7 +240,7 @@ body,
 
 /* ── NewRoutePanel ───────────────────────────────────────────────────────── */
 .new-route-panel {
-  width: 450px;
+  width: 530px;
   border-left: 1px solid #d0d0d0;
   background: #fff;
   display: flex;
@@ -502,7 +502,7 @@ body,
 
 /* ── IntersectionPanel ───────────────────────────────────────────────────── */
 .intersection-panel {
-  width: 450px;
+  width: 530px;
   border-left: 1px solid #d0d0d0;
   background: #fff;
   display: flex;
@@ -658,7 +658,7 @@ body,
 
 /* ── TrimRoutePanel ──────────────────────────────────────────────────────── */
 .trim-route-panel {
-  width: 450px;
+  width: 530px;
   border-left: 1px solid #d0d0d0;
   background: #fff;
   display: flex;
@@ -865,6 +865,10 @@ body,
   color: #0f766e;
   background: #e8f5f4;
 }
+
+/* ── Route panel complete-edit toggle (green when finished) ──────────────── */
+.route-panel-complete-btn--done,
+.route-panel-complete-btn--done:hover { color: #16a34a; }
 
 /* ── NamesEditModal ──────────────────────────────────────────────────────── */
 .names-modal-overlay {

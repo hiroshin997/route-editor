@@ -7,6 +7,8 @@ import TrafficIcon from '@mui/icons-material/Traffic';
 import MergeIcon from '@mui/icons-material/Merge';
 import LoopIcon from '@mui/icons-material/Loop';
 import DeleteIcon from '@mui/icons-material/Delete';
+import CheckBoxIcon from '@mui/icons-material/CheckBox';
+import IndeterminateCheckBoxIcon from '@mui/icons-material/IndeterminateCheckBox';
 import { RoutePolyline } from '../types/route';
 
 // route-panel は表示切り替えで unmount されるため、スクロール位置はモジュールスコープで保持する。
@@ -35,6 +37,7 @@ interface RoutePanelProps {
   intersectionRelationId?: number;
   onCoupleRoute: (relation_id: number) => void;
   onDeletePath: (relation_id: number, path_idx: number, route_name: string) => void;
+  onToggleCompleteEdit: (relation_id: number, path_idx: number, is_complete: boolean) => void;
 }
 
 const RoutePanel: React.FC<RoutePanelProps> = ({
@@ -58,6 +61,7 @@ const RoutePanel: React.FC<RoutePanelProps> = ({
   intersectionRelationId,
   onCoupleRoute,
   onDeletePath,
+  onToggleCompleteEdit,
 }) => {
   const newRouteEnabled = citySelected && zoom >= 10;
   // relation_id → number of paths currently listed for that route. A route with
@@ -211,6 +215,15 @@ const RoutePanel: React.FC<RoutePanelProps> = ({
                     onClick={(e) => { e.stopPropagation(); onCoupleRoute(rp.relation_id!); }}
                   >
                     <MergeIcon fontSize="small" />
+                  </button>
+                  <button
+                    className={`route-panel-edit-btn route-panel-complete-btn${rp.is_complete_route_edit ? ' route-panel-complete-btn--done' : ''}`}
+                    title={rp.is_complete_route_edit ? '編集完了（クリックで未完了に戻す）' : '編集未完了（クリックで完了にする）'}
+                    onClick={(e) => { e.stopPropagation(); onToggleCompleteEdit(rp.relation_id!, rp.path_idx ?? 0, !rp.is_complete_route_edit); }}
+                  >
+                    {rp.is_complete_route_edit
+                      ? <CheckBoxIcon fontSize="small" />
+                      : <IndeterminateCheckBoxIcon fontSize="small" />}
                   </button>
                 </>
               )}
