@@ -823,20 +823,59 @@ function sectorsShareNode(s, t) {
   return a === c || a === d || b === c || b === d;
 }
 
+/** Keys identifying a road_sector within its road (node pair + coord_index). */
+function sectorKeys(s) {
+  const a = nodeToInt(s.min_node_id), b = nodeToInt(s.max_node_id);
+  return [`n:${Math.min(a, b)}-${Math.max(a, b)}`, `c:${s.coord_index}`];
+}
+
+/**
+ * Merge consecutive entries of the same road_id traversed in the same direction
+ * into one entry (e.g. a roundabout split into two pieces by a link). The merged
+ * entry keeps the outer side-road IDs: the first piece's entry side and the
+ * second piece's exit side.
+ */
+function mergeAdjacentSameRoads(roads) {
+  const out = [];
+  for (const r of roads || []) {
+    const prev = out[out.length - 1];
+    const prevSectors = prev?.road_sectors || [];
+    const sectors = r.road_sectors || [];
+    const dir = sectors[0]?.direction;
+    if (prev && Number(prev.road_id) === Number(r.road_id) && dir && prevSectors.length
+        && prevSectors.every((s) => s.direction === dir) && sectors.every((s) => s.direction === dir)
+        && sectorsShareNode(prevSectors[prevSectors.length - 1], sectors[0])) {
+      const exitKey = dir === 'ascend' ? 'max_side_road_id' : 'min_side_road_id';
+      out[out.length - 1] = { ...prev, road_sectors: [...prevSectors, ...sectors], [exitKey]: r[exitKey] };
+      continue;
+    }
+    out.push(r);
+  }
+  return out.length === (roads || []).length ? roads : out;
+}
+
 /**
  * Remove later repeats of a road_id from one path's ordered roads[] (the first
- * occurrence is kept). Each run of removed roads must leave the path connected:
+ * occurrence is kept). A repeat only counts as a duplicate when one of its
+ * road_sectors conflicts with a sector already used by that road_id; repeats
+ * covering other sectors of the same road (e.g. two pieces of a roundabout)
+ * are kept, and adjacent pieces are merged into one entry.
+ * Each run of removed roads must leave the path connected:
  * the kept road before the run and the kept road after it must share a node
  * (a run at the path end just shortens the path). Otherwise throws
  * DuplicateRoadIdError so the user re-edits the path.
  * The side-road IDs across each closed gap are re-pointed at the new neighbours.
  */
-function removeDuplicateRoads(roads) {
-  const seen = new Set();
+function removeDuplicateRoads(inputRoads) {
+  const roads = mergeAdjacentSameRoads(inputRoads);
+  const usedSectors = new Map(); // road_id -> Set of sector keys
   const keep = (roads || []).map((r) => {
     const id = Number(r.road_id);
-    if (seen.has(id)) return false;
-    seen.add(id);
+    const keys = (r.road_sectors || []).flatMap(sectorKeys);
+    let used = usedSectors.get(id);
+    if (used && (!keys.length || keys.some((k) => used.has(k)))) return false;
+    if (!used) { used = new Set(); usedSectors.set(id, used); }
+    keys.forEach((k) => used.add(k));
     return true;
   });
   if (keep.every(Boolean)) return roads;
